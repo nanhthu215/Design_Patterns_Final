@@ -1,6 +1,5 @@
 const Review = require('../models/Review');
 const Product = require('../models/Product');
-const { ProductFactory } = require('../strategies/ProductFactory');
 /**
  * ProductController - Business logic layer cho Products
  * Xử lý HTTP requests và gọi Repository
@@ -56,30 +55,6 @@ class ProductController {
       next(error);
     }
   }
-
-  // Tạo method mới (thêm vào class)
-    async createWithFactory(req, res, next) {
-        try {
-            const { type = 'generic', ...productData } = req.body;
-
-            // ✅ Use Factory Pattern
-            const product = ProductFactory.createProduct(type, productData);
-
-            // Validate product
-            product.validate();
-
-            // Save to database
-            const saved = await this.productRepository.create(product);
-
-            res.status(201).json({
-            success: true,
-            data: saved,
-            message: `${type} product created successfully`,
-            });
-        } catch (error) {
-            next(error);
-        }
-    }
 
   /**
    * GET /api/products/:id - Lấy chi tiết một sản phẩm

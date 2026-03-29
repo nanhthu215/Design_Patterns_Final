@@ -21,6 +21,7 @@ export const CartProvider = ({ children }) => {
     }
   });
 
+  // OBSERVER PATTERN: Persist cart to localStorage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
@@ -28,6 +29,31 @@ export const CartProvider = ({ children }) => {
       // ignore
     }
   }, [items]);
+
+  // OBSERVER PATTERN: Sync cart across tabs/windows using storage events
+  // Implements real-time observation of cart state changes from other browser tabs/windows
+  useEffect(() => {
+    const handleStorageChange = (event) => {
+      // Only respond to changes in the cart storage key from other tabs
+      if (event.key === STORAGE_KEY && event.newValue) {
+        try {
+          const newItems = JSON.parse(event.newValue);
+          setItems(newItems);
+          console.log('✅ [CartObserver] Cart synchronized from another tab/window');
+        } catch (error) {
+          console.error('❌ [CartObserver] Failed to sync cart:', error.message);
+        }
+      }
+    };
+
+    // Listen for storage changes from other tabs/windows
+    window.addEventListener('storage', handleStorageChange);
+
+    // Cleanup: Remove listener when component unmounts
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   const addToCart = (payload) => {
     if (!payload) return;

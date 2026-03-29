@@ -354,7 +354,7 @@ class ProductRepository {
         { returnDocument: 'after' }
       );
 
-      return result.value;
+      return result?.value || result;
     } catch (err) {
       console.log('Failed to update in products.productsList:', err.message);
     }
@@ -372,7 +372,7 @@ class ProductRepository {
         { returnDocument: 'after' }
       );
 
-      return result.value;
+      return result?.value || result;
     } catch (err) {
       console.log(`Failed to update in ${collectionName}:`, err.message);
     }
@@ -388,7 +388,7 @@ class ProductRepository {
         $or: [{ id: productId }, { _id: productId }],
       });
 
-      return result.value;
+      return result?.value || result;
     } catch (err) {
       console.log('Failed to delete in products.productsList:', err.message);
     }
@@ -403,7 +403,7 @@ class ProductRepository {
         $or: [{ id: productId }, { _id: productId }],
       });
 
-      return result.value;
+      return result?.value || result;
     } catch (err) {
       console.log(`Failed to delete in ${collectionName}:`, err.message);
     }

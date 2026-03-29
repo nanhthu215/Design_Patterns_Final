@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
+const ProductFactory = require('../services/ProductFactory');
 
 /**
  * ProductRepository - Data access layer cho Products
@@ -95,6 +96,9 @@ class ProductRepository {
    */
   async create(productData) {
     const newProduct = { ...productData };
+
+    // chuẩn hoá bằng ProductFactory (Factory Pattern)
+    newProduct = ProductFactory.createProduct(newProduct.category || 'general', newProduct);
 
     // Try save to products.productsList
     let saved = await this._saveToProductsDb(newProduct);

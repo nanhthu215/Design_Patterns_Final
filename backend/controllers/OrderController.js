@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { DataExportService } = require('../services/DataExportService');
 
 /**
  * OrderController - Business logic layer for Order operations
@@ -8,6 +9,7 @@ class OrderController {
     this.orderRepository = orderRepository;
     this.mailer = mailer;
     this.loyaltyUtils = loyaltyUtils;
+    this.exportService = new DataExportService();
   }
 
   /**
@@ -465,11 +467,20 @@ class OrderController {
   }
 
   /**
-   * POST /api/orders/export - Export orders as CSV
+   * POST /api/orders/export - Export orders in various formats (Strategy Pattern)
    */
   async exportOrders(req, res, next) {
     try {
-      const { status, dateFrom, dateTo } = req.query;
+      const { status, dateFrom, dateTo, format = 'csv' } = req.query;
+
+      // Validate format
+      const supportedFormats = this.exportService.getSupportedFormats();
+      if (!supportedFormats.includes(format.toLowerCase())) {
+        return res.status(400).json({
+          success: false,
+          message: `Unsupported format. Supported formats: ${supportedFormats.join(', ')}`
+        });
+      }
 
       const filters = {
         status: status ? [status] : [],
@@ -477,38 +488,127 @@ class OrderController {
         dateTo,
       };
 
+      // Get data from repository
       const orders = await this.orderRepository.findForExport(filters);
 
-      // Convert to CSV format
-      const csv = this._convertOrdersToCSV(orders);
+      // Transform data for export
+      const exportData = orders.map(order => ({
+        'Order ID': order.displayCode || (order._id ? order._id.toString() : 'N/A'),
+        'Customer Name': order.customerId ? order.customerId.fullName : 'N/A',
+        'Customer Email': order.customerId ? order.customerId.email : 'N/A',
+        'Total Amount': order.totalAmount || 0,
+        'Status': order.status || 'N/A',
+        'Created Date': order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A',
+        'Payment Method': order.paymentMethod || 'N/A'
+      }));
 
-      res.setHeader("Content-Type", "text/csv");
-      res.setHeader("Content-Disposition", 'attachment; filename="orders.csv"');
-      return res.send(csv);
+      // Use Strategy Pattern to export in requested format
+      const exportResult = await this.exportService.exportData(exportData, format);
+
+      // Set response headers
+      res.setHeader('Content-Type', exportResult.contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="orders.${exportResult.fileExtension}"`);
+
+      return res.send(exportResult.data);
     } catch (error) {
-      next(error);
+      console.error('Export error:', error);
+      return next(error);
     }
   }
 
   /**
-   * Convert orders to CSV format
+   * GET /api/orders/export/debug - Debug export data structure
    */
-  _convertOrdersToCSV(orders) {
-    const headers = ["Order ID", "Customer Email", "Total Amount", "Status", "Created Date"];
-    const rows = orders.map((order) => [
-      order.displayCode || order._id,
-      order.customerEmail,
-      order.totalAmount,
-      order.status,
-      new Date(order.createdAt).toLocaleDateString(),
-    ]);
+  async debugExport(req, res, next) {
+    try {
+      const orders = await this.orderRepository.findForExport({}, "-createdAt", 1); // Get first order
 
-    const csvContent = [
-      headers.join(","),
-      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
-    ].join("\n");
+      return res.json({
+        success: true,
+        data: orders[0], // Return first order for inspection
+        customerId: orders[0]?.customerId,
+        hasCustomerId: !!orders[0]?.customerId
+      });
+    } catch (error) {
+      console.error('Debug export error:', error);
+      return next(error);
+    }
+  }
 
-    return csvContent;
+  /**
+   * GET /api/orders/export/formats - List supported export formats
+   */
+  async getExportFormats(req, res, next) {
+    try {
+      const supportedFormats = this.exportService.getSupportedFormats();
+      return res.json({
+        success: true,
+        data: supportedFormats.map(format => ({
+          format,
+          description: this._getFormatDescription(format)
+        }))
+      });
+    } catch (error) {
+      console.error('Get export formats error:', error);
+      return next(error);
+    }
+  }
+
+  /**
+   * GET /api/orders/export/test - Test export functionality
+   */
+  async testExport(req, res, next) {
+    try {
+      const { format = 'csv' } = req.query;
+
+      const testData = [
+        {
+          'Order ID': 'ORD-001',
+          'Customer Name': 'Nguyễn Văn A',
+          'Customer Email': 'test@example.com',
+          'Total Amount': 150000,
+          'Status': 'completed',
+          'Created Date': '2026-03-29',
+          'Payment Method': 'cash'
+        }
+      ];
+
+      const exportResult = await this.exportService.exportData(testData, format);
+
+      res.setHeader('Content-Type', exportResult.contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="test.${exportResult.fileExtension}"`);
+
+      return res.send(exportResult.data);
+    } catch (error) {
+      console.error('Test export error:', error);
+      return next(error);
+    }
+  }
+
+  /**
+   * Helper method to get format description
+   */
+  _getFormatDescription(format) {
+    const descriptions = {
+      csv: 'Comma-separated values, compatible with Excel and most spreadsheet applications',
+      json: 'JavaScript Object Notation, suitable for APIs and data processing',
+      xml: 'Extensible Markup Language, good for structured data exchange',
+      excel: 'Microsoft Excel format, basic spreadsheet compatibility'
+    };
+    return descriptions[format] || 'Unknown format';
+  }
+
+  /**
+   * Helper method to get format content type
+   */
+  _getFormatContentType(format) {
+    const contentTypes = {
+      csv: 'text/csv',
+      json: 'application/json',
+      xml: 'application/xml',
+      excel: 'application/vnd.ms-excel'
+    };
+    return contentTypes[format] || 'application/octet-stream';
   }
 }
 

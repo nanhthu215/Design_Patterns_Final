@@ -26,8 +26,17 @@ router.get('/dashboard/metrics', (req, res, next) =>
   orderController.getDashboardMetrics(req, res, next)
 );
 
-router.post('/export', (req, res, next) =>
+// Export routes - must be before :id route
+router.get('/export', (req, res, next) =>
   orderController.exportOrders(req, res, next)
+);
+
+router.get('/export/formats', (req, res, next) =>
+  orderController.getExportFormats(req, res, next)
+);
+
+router.get('/export/debug', (req, res, next) =>
+  orderController.debugExport(req, res, next)
 );
 
 router.get('/user/:userId', (req, res, next) =>

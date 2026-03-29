@@ -1,11 +1,18 @@
 /**
  * OrderRepository - Data access layer for Order operations
+ * Enhanced with DAO Pattern and caching
  */
+const { OrderDAO, DAOFactory } = require('../services/DataStorageService');
+
 class OrderRepository {
   constructor(OrderModel, CustomerModel, DiscountCodeModel) {
     this.Order = OrderModel;
     this.Customer = CustomerModel;
     this.DiscountCode = DiscountCodeModel;
+
+    // Initialize DAO with caching enabled
+    this.daoFactory = new DAOFactory();
+    this.orderDAO = this.daoFactory.createDAO('Order', OrderModel, CustomerModel);
   }
 
   /**
@@ -47,10 +54,10 @@ class OrderRepository {
   }
 
   /**
-   * Find order by ID
+   * Find order by ID - Enhanced with DAO caching
    */
   async findById(orderId) {
-    return await this.Order.findById(orderId).lean();
+    return await this.orderDAO.findById(orderId);
   }
 
   /**
@@ -145,49 +152,10 @@ class OrderRepository {
   }
 
   /**
-   * Get order statistics (for dashboard)
+   * Get order statistics (for dashboard) - Enhanced with DAO caching
    */
   async getStatistics(timeRange = "all") {
-    const now = new Date();
-    let startDate = null;
-
-    if (timeRange === "today") {
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    } else if (timeRange === "week") {
-      startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    } else if (timeRange === "month") {
-      startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    }
-
-    const matchStage = startDate
-      ? { createdAt: { $gte: startDate } }
-      : {};
-
-    const stats = await this.Order.aggregate([
-      { $match: matchStage },
-      {
-        $group: {
-          _id: null,
-          totalOrders: { $sum: 1 },
-          totalRevenue: { $sum: "$totalAmount" },
-          averageOrder: { $avg: "$totalAmount" },
-          completedOrders: {
-            $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
-          },
-          cancelledOrders: {
-            $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] },
-          },
-        },
-      },
-    ]);
-
-    return stats.length > 0 ? stats[0] : {
-      totalOrders: 0,
-      totalRevenue: 0,
-      averageOrder: 0,
-      completedOrders: 0,
-      cancelledOrders: 0,
-    };
+    return await this.orderDAO.getOrderStats(timeRange);
   }
 
   /**
@@ -237,7 +205,23 @@ class OrderRepository {
       if (dateTo) where.createdAt.$lte = new Date(dateTo);
     }
 
-    return await this.Order.find(where).sort(sort).lean();
+    // Get orders and manually populate customer data
+    const orders = await this.Order.find(where).sort(sort).lean();
+
+    // Populate customer data by email lookup
+    const populatedOrders = await Promise.all(
+      orders.map(async (order) => {
+        if (order.customerEmail) {
+          const customer = await this.Customer.findOne({ email: order.customerEmail }).select('fullName email').lean();
+          if (customer) {
+            order.customerId = customer; // Temporarily assign for export
+          }
+        }
+        return order;
+      })
+    );
+
+    return populatedOrders;
   }
 
   /**

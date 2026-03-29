@@ -1,7 +1,8 @@
 const express = require('express');
 const multer = require('multer');
-const cloudinary = require('../config/cloudinary');
-const { Readable } = require('stream');
+const UploadRepository = require('../repositories/UploadRepository');
+const UploadController = require('../controllers/UploadController');
+
 const router = express.Router();
 
 // Configure multer to store files in memory
@@ -22,106 +23,43 @@ const upload = multer({
   },
 });
 
-// Helper function to upload buffer to Cloudinary
-const uploadToCloudinary = (buffer, folder = 'products') => {
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: folder,
-        resource_type: 'image',
-        transformation: [
-          { width: 800, height: 800, crop: 'limit' }, // Resize to max 800x800
-          { quality: 'auto' }, // Auto optimize quality
-        ],
-      },
-      (error, result) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(result);
-        }
-      }
-    );
+// Initialize repository and controller
+const uploadRepository = new UploadRepository();
+const uploadController = new UploadController(uploadRepository);
 
-    // Convert buffer to stream
-    const stream = Readable.from(buffer);
-    stream.pipe(uploadStream);
-  });
-};
+/**
+ * POST /api/upload/image - Upload single image to Cloudinary
+ */
+router.post('/image', upload.single('image'), (req, res, next) =>
+  uploadController.uploadImage(req, res, next)
+);
 
-// POST /api/upload/image - Upload single image to Cloudinary
-router.post('/image', upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: 'No image file provided',
-      });
-    }
+/**
+ * POST /api/upload/images - Upload multiple images to Cloudinary
+ */
+router.post('/images', upload.array('images', 10), (req, res, next) =>
+  uploadController.uploadImages(req, res, next)
+);
 
-    // Upload to Cloudinary
-    const result = await uploadToCloudinary(req.file.buffer, 'products');
+/**
+ * POST /api/upload/avatar - Upload avatar image
+ */
+router.post('/avatar', upload.single('avatar'), (req, res, next) =>
+  uploadController.uploadAvatar(req, res, next)
+);
 
-    res.json({
-      success: true,
-      message: 'Image uploaded successfully',
-      data: {
-        url: result.secure_url,
-        publicId: result.public_id,
-        secureUrl: result.secure_url,
-        width: result.width,
-        height: result.height,
-        format: result.format,
-      },
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error uploading image',
-      error: error.message,
-    });
-  }
-});
+/**
+ * DELETE /api/upload/:publicId - Delete file from Cloudinary
+ */
+router.delete('/:publicId', (req, res, next) =>
+  uploadController.deleteFile(req, res, next)
+);
 
-// POST /api/upload/images - Upload multiple images to Cloudinary
-router.post('/images', upload.array('images', 10), async (req, res) => {
-  try {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No image files provided',
-      });
-    }
-
-    // Upload all images in parallel
-    const uploadPromises = req.files.map((file) =>
-      uploadToCloudinary(file.buffer, 'products')
-    );
-
-    const results = await Promise.all(uploadPromises);
-
-    const uploadedImages = results.map((result) => ({
-      url: result.secure_url,
-      publicId: result.public_id,
-      secureUrl: result.secure_url,
-      width: result.width,
-      height: result.height,
-      format: result.format,
-    }));
-
-    res.json({
-      success: true,
-      message: 'Images uploaded successfully',
-      data: uploadedImages,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error uploading images',
-      error: error.message,
-    });
-  }
-});
+/**
+ * GET /api/upload/:publicId/info - Get file information
+ */
+router.get('/:publicId/info', (req, res, next) =>
+  uploadController.getFileInfo(req, res, next)
+);
 
 module.exports = router;
-

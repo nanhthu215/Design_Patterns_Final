@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
+const ProductFactory = require('../services/ProductFactory');
 
 /**
  * ProductRepository - Data access layer cho Products
@@ -95,6 +96,9 @@ class ProductRepository {
    */
   async create(productData) {
     const newProduct = { ...productData };
+
+    // chuẩn hoá bằng ProductFactory (Factory Pattern)
+    newProduct = ProductFactory.createProduct(newProduct.category || 'general', newProduct);
 
     // Try save to products.productsList
     let saved = await this._saveToProductsDb(newProduct);
@@ -354,7 +358,7 @@ class ProductRepository {
         { returnDocument: 'after' }
       );
 
-      return result.value;
+      return result?.value || result;
     } catch (err) {
       console.log('Failed to update in products.productsList:', err.message);
     }
@@ -372,7 +376,7 @@ class ProductRepository {
         { returnDocument: 'after' }
       );
 
-      return result.value;
+      return result?.value || result;
     } catch (err) {
       console.log(`Failed to update in ${collectionName}:`, err.message);
     }
@@ -388,7 +392,7 @@ class ProductRepository {
         $or: [{ id: productId }, { _id: productId }],
       });
 
-      return result.value;
+      return result?.value || result;
     } catch (err) {
       console.log('Failed to delete in products.productsList:', err.message);
     }
@@ -403,7 +407,7 @@ class ProductRepository {
         $or: [{ id: productId }, { _id: productId }],
       });
 
-      return result.value;
+      return result?.value || result;
     } catch (err) {
       console.log(`Failed to delete in ${collectionName}:`, err.message);
     }

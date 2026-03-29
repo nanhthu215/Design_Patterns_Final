@@ -5,11 +5,12 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const connectDB = require("./config/database");
 const http = require("http");
+const net = require("net");
 const WebSocket = require("ws");
 
 
 const app = express();
-const PORT = process.env.PORT || 3001; // Đổi port để tránh xung đột với frontend
+const START_PORT = Number(process.env.PORT) || 3001; // port khởi đầu
 
 connectDB();
 
@@ -161,7 +162,33 @@ app.use((req, res, next) => {
 app.use(errorHandler);
 
 // ================== START SERVER ==================
-server.listen(PORT, () => {
-  console.log(`🚀 HTTP + WS server is running at http://localhost:${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
-});
+const findAvailablePort = (port) =>
+  new Promise((resolve, reject) => {
+    const tester = net.createServer()
+      .once("error", (err) => {
+        if (err.code === "EADDRINUSE") {
+          resolve(findAvailablePort(port + 1));
+        } else {
+          reject(err);
+        }
+      })
+      .once("listening", () => {
+        tester
+          .once("close", () => resolve(port))
+          .close();
+      })
+      .listen(port);
+  });
+
+(async () => {
+  try {
+    const freePort = await findAvailablePort(START_PORT);
+    server.listen(freePort, () => {
+      console.log(`🚀 HTTP + WS server is running at http://localhost:${freePort}`);
+      console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
+    });
+  } catch (err) {
+    console.error("❌ Không tìm được port trống:", err);
+    process.exit(1);
+  }
+})();

@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const { DataExportService } = require('../services/DataExportService');
-
+const PaymentProcessor = require('../strategies/PaymentProcessor');
 /**
  * OrderController - Business logic layer for Order operations
  */
@@ -10,6 +10,7 @@ class OrderController {
     this.mailer = mailer;
     this.loyaltyUtils = loyaltyUtils;
     this.exportService = new DataExportService();
+    this.paymentProcessor = new PaymentProcessor();
   }
 
   /**
@@ -273,12 +274,19 @@ class OrderController {
    */
   async create(req, res, next) {
     try {
-      const { customerId, items, shippingAddress, discountCode, usePoints } = req.body;
+      const { customerId, items, shippingAddress, discountCode, usePoints, paymentMethod, paymentDetails } = req.body;
 
       if (!customerId || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({
           success: false,
           message: "Missing customerId or items",
+        });
+      }
+
+      if (!paymentMethod || !paymentDetails) {
+        return res.status(400).json({
+            success: false,
+            message: "Payment method and details are required",
         });
       }
 
@@ -315,6 +323,20 @@ class OrderController {
 
       const totalAmount = subtotal - discountAmount;
 
+      const paymentResult = await this.paymentProcessor.processPayment(
+        paymentMethod,
+        paymentDetails,
+        totalAmount
+        );
+
+        if (!paymentResult.success) {
+        return res.status(400).json({
+            success: false,
+            message: "Payment failed",
+            error: paymentResult.error,
+        });
+    }
+
       // Generate display code (4-char alphanumeric)
       const displayCode = Math.random().toString(36).substring(2, 6).toUpperCase();
 
@@ -330,6 +352,9 @@ class OrderController {
         shippingFee: 0,
         status: "pending",
         displayCode,
+        paymentMethod: paymentMethod,
+        paymentStatus: paymentResult.success ? 'paid' : 'failed',
+        paymentTransactionId: paymentResult.transactionId,
         createdAt: new Date(),
       };
 

@@ -1,9 +1,14 @@
 // src/contexts/CartContext.jsx
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { useAuth } from "./AuthContext";
 
 const CartContext = createContext(null);
 
-const STORAGE_KEY = "cart-items";
+// Helper to get user-specific storage key
+function getStorageKey(userEmail) {
+  if (!userEmail) return 'cart-items-anonymous';
+  return `cart-items-${userEmail.toLowerCase()}`;
+}
 
 function normalizeQty(qty, stock) {
   const maxStock = Number.isFinite(stock) ? stock : 9999;
@@ -12,30 +17,48 @@ function normalizeQty(qty, stock) {
 }
 
 export const CartProvider = ({ children }) => {
+  // Get current user email from auth context
+  const auth = useAuth();
+  const currentUserEmail = auth?.user?.email || auth?.currentUser?.email || auth?.email || null;
+  const storageKey = getStorageKey(currentUserEmail);
+
   const [items, setItems] = useState(() => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(storageKey);
       return raw ? JSON.parse(raw) : [];
     } catch {
       return [];
     }
   });
 
-  // OBSERVER PATTERN: Persist cart to localStorage
+  // ✅ SECURITY FIX: When user changes (login/logout), reload cart from correct user's storage
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      const raw = localStorage.getItem(storageKey);
+      const userCart = raw ? JSON.parse(raw) : [];
+      setItems(userCart);
+      console.log(`🛒 [CartContext] Loaded cart for user: ${currentUserEmail || 'anonymous'} (${userCart.length} items)`);
+    } catch (error) {
+      console.error('❌ [CartContext] Error loading cart:', error);
+      setItems([]);
+    }
+  }, [currentUserEmail, storageKey]);
+
+  // OBSERVER PATTERN: Persist cart to user-specific localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(items));
     } catch {
       // ignore
     }
-  }, [items]);
+  }, [items, storageKey]);
 
   // OBSERVER PATTERN: Sync cart across tabs/windows using storage events
   // Implements real-time observation of cart state changes from other browser tabs/windows
   useEffect(() => {
     const handleStorageChange = (event) => {
-      // Only respond to changes in the cart storage key from other tabs
-      if (event.key === STORAGE_KEY && event.newValue) {
+      // Only respond to changes in the CURRENT USER's cart storage key
+      if (event.key === storageKey && event.newValue) {
         try {
           const newItems = JSON.parse(event.newValue);
           setItems(newItems);
@@ -53,7 +76,7 @@ export const CartProvider = ({ children }) => {
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
-  }, []);
+  }, [storageKey]);
 
   const addToCart = (payload) => {
     if (!payload) return;

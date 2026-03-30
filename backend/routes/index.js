@@ -22,7 +22,7 @@ const uploadRouter = require('./upload');
 const debugRouter = require('./debug');
 const authRouter      = require('./auth');
 const discountCodesRouter = require("./discountCodes");
-const reviewsRouter = require('./reviews');
+const reviewsRouter = require('./review');
 
 /**
  * API Endpoints Documentation

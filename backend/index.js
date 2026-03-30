@@ -68,82 +68,27 @@ app.get("/health", (req, res) => {
   });
 });
 
-// ================== WEBSOCKET CHO REVIEWS ==================
+// ================== PURE PATTERN INITIALIZATION ==================
 const server = http.createServer(app); // thay vì app.listen trực tiếp
 
-// Tạo WebSocket server gắn vào cùng HTTP server
-const wss = new WebSocket.Server({ server });
+// Initialize pure patterns with adapters
+const ReviewObserver = require("./core/services/ReviewObserver");
+const WebSocketAdapter = require("./core/adapters/WebSocketAdapter");
+const MemoryStorageAdapter = require("./core/adapters/MemoryStorageAdapter");
+const CartService = require("./core/services/CartService");
 
-// (optional) lưu client theo product để broadcast
-const clientsByProduct = new Map(); // productId -> Set<WebSocket>
+// ✅ Setup ReviewObserver (pure)
+const reviewObserver = ReviewObserver.getInstance();
 
-wss.on("connection", (ws, req) => {
-  // URL dạng: /ws/products/:id/reviews
-  const url = new URL(req.url, `http://localhost:${PORT}`);
-  const parts = url.pathname.split("/").filter(Boolean); // ["ws","products",":id","reviews"]
+// ✅ Setup WebSocket adapter to connect pure observer to Express
+const wsAdapter = new WebSocketAdapter(server, reviewObserver);
 
-  let productId = null;
-  if (parts[0] === "ws" && parts[1] === "products" && parts[3] === "reviews") {
-    productId = parts[2];
-  }
+// ✅ Setup CartService with storage injection
+CartService.setStorage(MemoryStorageAdapter.getInstance());
 
-  console.log("🔌 Reviews WS connected:", url.pathname, "productId =", productId);
-
-  // Lưu client vào map theo productId (để sau broadcast review mới)
-  if (productId) {
-    if (!clientsByProduct.has(productId)) {
-      clientsByProduct.set(productId, new Set());
-    }
-    clientsByProduct.get(productId).add(ws);
-  }
-
-  // Gửi message chào để FE biết connect OK
-  ws.send(
-    JSON.stringify({
-      type: "hello",
-      message: "Connected to reviews WebSocket",
-      productId,
-    })
-  );
-
-  ws.on("message", (msg) => {
-    console.log("📨 WS message from client:", msg.toString());
-    // tuỳ m, có thể cho client gửi "ping" hoặc gì đó, ở đây t chỉ log
-  });
-
-  ws.on("close", () => {
-    console.log("❌ Reviews WS disconnected:", productId);
-    if (productId && clientsByProduct.has(productId)) {
-      const set = clientsByProduct.get(productId);
-      set.delete(ws);
-      if (!set.size) clientsByProduct.delete(productId);
-    }
-  });
-
-  ws.on("error", (err) => {
-    console.error("⚠️ Reviews WS error:", err.message);
-  });
-});
-
-// Helper broadcast review mới cho tất cả client đang xem cùng product
-function broadcastReview(productId, review) {
-  const set = clientsByProduct.get(String(productId));
-  if (!set) return;
-
-  const payload = JSON.stringify({
-    type: "review:new",
-    payload: review,
-  });
-
-  for (const client of set) {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(payload);
-    }
-  }
-}
-
-// Cho chỗ khác xài (controller reviews)
-module.exports.broadcastReview = broadcastReview;
+// ✅ Export for controllers to use
+module.exports.reviewObserver = reviewObserver;
+module.exports.wsAdapter = wsAdapter;
 
 // ================== GLOBAL ERROR HANDLER ==================
 const { errorHandler } = require("./middleware/errorHandler");

@@ -1,11 +1,12 @@
 /**
  * backend/controllers/ReviewController.js
- * ✅ OBSERVER PATTERN: Broadcasts review changes to all connected WebSocket clients
+ * ✅ OBSERVER PATTERN: Broadcasts review changes to pure observer
  */
 
 class ReviewController {
-  constructor(reviewRepository) {
+  constructor(reviewRepository, reviewObserver) {
     this.reviewRepository = reviewRepository;
+    this.reviewObserver = reviewObserver;
   }
 
   /**
@@ -39,16 +40,11 @@ class ReviewController {
         comment,
       });
 
-      // ✅ OBSERVER PATTERN: BROADCAST to WebSocket clients
+      // ✅ OBSERVER PATTERN: BROADCAST using pure observer
       try {
-        const { broadcastReview } = require('../index');
-        broadcastReview(productId, {
-          type: 'review:new',
-          data: review,
-          timestamp: new Date().toISOString(),
-        });
+        this.reviewObserver.broadcastNewReview(productId, review);
       } catch (wsError) {
-        console.error('⚠️ WebSocket broadcast error:', wsError.message);
+        console.error('⚠️ Observer broadcast error:', wsError.message);
       }
 
       return res.status(201).json({
@@ -139,16 +135,11 @@ class ReviewController {
         });
       }
 
-      // ✅ OBSERVER PATTERN: BROADCAST update
+      // ✅ OBSERVER PATTERN: BROADCAST update using pure observer
       try {
-        const { broadcastReview } = require('../index');
-        broadcastReview(review.productId, {
-          type: 'review:updated',
-          data: review,
-          timestamp: new Date().toISOString(),
-        });
+        this.reviewObserver.broadcastUpdateReview(review.productId, review);
       } catch (wsError) {
-        console.error('⚠️ WebSocket broadcast error:', wsError.message);
+        console.error('⚠️ Observer broadcast error:', wsError.message);
       }
 
       return res.json({
@@ -178,16 +169,11 @@ class ReviewController {
 
       await this.reviewRepository.delete(req.params.id);
 
-      // ✅ OBSERVER PATTERN: BROADCAST deletion
+      // ✅ OBSERVER PATTERN: BROADCAST deletion using pure observer
       try {
-        const { broadcastReview } = require('../index');
-        broadcastReview(review.productId, {
-          type: 'review:deleted',
-          data: { id: req.params.id, productId: review.productId },
-          timestamp: new Date().toISOString(),
-        });
+        this.reviewObserver.broadcastDeleteReview(review.productId, req.params.id);
       } catch (wsError) {
-        console.error('⚠️ WebSocket broadcast error:', wsError.message);
+        console.error('⚠️ Observer broadcast error:', wsError.message);
       }
 
       return res.json({

@@ -26,6 +26,12 @@ class OrderRepository {
     // Build query
     const where = {};
 
+    // ✅ SECURITY FIX: Apply all filters passed from controller
+    // This includes customerEmail filter (the critical one)
+    Object.keys(filters).forEach(key => {
+      where[key] = filters[key];
+    });
+
     if (searchTerm) {
       const regex = new RegExp(searchTerm, "i");
       where.$or = [

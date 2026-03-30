@@ -116,15 +116,25 @@ class OrderController {
       const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
       const { q, status, email, range, startDate, endDate } = req.query;
 
+      // ✅ SECURITY FIX: Require email filter to prevent viewing all orders
+      // Only admin or authenticated users should see filtered orders
+      if (!email || String(email).trim() === "") {
+        console.warn('⚠️ [OrderController] Rejected: Missing email filter for getAll()');
+        return res.status(400).json({
+          success: false,
+          message: 'Email filter is required to fetch orders. Please provide an email parameter.',
+          data: []
+        });
+      }
+
       // Build filters
       const filters = {};
       if (status) filters.status = status;
 
-      if (email && (!q || q === "" || String(q).trim() === "")) {
-        filters.customerEmail = new RegExp(String(email), "i");
-      }
+      // ✅ SECURITY: Always filter by email (required parameter)
+      filters.customerEmail = new RegExp(String(email), "i");
 
-      // Search by order code/displayCode
+      // Search by order code/displayCode (only if provided)
       if (q !== undefined && q !== null && String(q).trim() !== "") {
         let searchTerm = String(q).trim().replace(/^#+/, "");
 

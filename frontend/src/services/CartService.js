@@ -4,6 +4,7 @@
  * 
  * Ensures only ONE instance of CartService exists throughout the application lifecycle
  * Manages cart state with persistence and real-time cross-tab synchronization
+ * ✅ SECURITY FIX: User-specific storage to prevent cart mixing between users
  */
 
 class CartService {
@@ -13,11 +14,17 @@ class CartService {
   // ✅ Static property to hold cart items
   static #items = [];
 
-  // ✅ Storage key for persistence
-  static #STORAGE_KEY = 'cart-items-singleton';
+  // ✅ Current user email (for user-specific storage keys)
+  static #currentUserEmail = null;
 
   // ✅ Observer listeners for state changes
   static #listeners = new Set();
+
+  // ✅ Helper to get user-specific storage key
+  static #getStorageKey(email) {
+    if (!email) return 'cart-items-singleton-anonymous';
+    return `cart-items-singleton-${email.toLowerCase()}`;
+  }
 
   /**
    * ✅ SINGLETON: Private constructor prevents instantiation
@@ -52,12 +59,14 @@ class CartService {
 
   /**
    * Load cart items from localStorage on init
+   * ✅ Uses user-specific storage key to prevent mixing carts
    */
   static #loadFromStorage() {
     try {
-      const stored = localStorage.getItem(CartService.#STORAGE_KEY);
+      const storageKey = CartService.#getStorageKey(CartService.#currentUserEmail);
+      const stored = localStorage.getItem(storageKey);
       CartService.#items = stored ? JSON.parse(stored) : [];
-      console.log(`📦 [CartService] Loaded ${CartService.#items.length} items from storage`);
+      console.log(`📦 [CartService] Loaded ${CartService.#items.length} items from storage for ${CartService.#currentUserEmail || 'anonymous'}`);
     } catch (error) {
       console.error('❌ [CartService] Error loading from storage:', error);
       CartService.#items = [];
@@ -66,12 +75,25 @@ class CartService {
 
   /**
    * Save cart items to localStorage
+   * ✅ Uses user-specific storage key
    */
   static #saveToStorage() {
     try {
-      localStorage.setItem(CartService.#STORAGE_KEY, JSON.stringify(CartService.#items));
+      const storageKey = CartService.#getStorageKey(CartService.#currentUserEmail);
+      localStorage.setItem(storageKey, JSON.stringify(CartService.#items));
     } catch (error) {
       console.error('❌ [CartService] Error saving to storage:', error);
+    }
+  }
+
+  /**
+   * ✅ SECURITY: Set current user email to enable user-specific storage
+   */
+  static setCurrentUser(email) {
+    if (CartService.#currentUserEmail !== email) {
+      console.log(`🔄 [CartService] User changed: ${CartService.#currentUserEmail} → ${email}`);
+      CartService.#currentUserEmail = email;
+      CartService.#loadFromStorage(); // Reload cart for new user
     }
   }
 
@@ -80,7 +102,8 @@ class CartService {
    */
   static #setupStorageListener() {
     const handleStorageChange = (event) => {
-      if (event.key === CartService.#STORAGE_KEY && event.newValue) {
+      const storageKey = CartService.#getStorageKey(CartService.#currentUserEmail);
+      if (event.key === storageKey && event.newValue) {
         try {
           CartService.#items = JSON.parse(event.newValue);
           console.log('🔄 [CartService Observer] Cart synced from another tab');

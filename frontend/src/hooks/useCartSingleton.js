@@ -4,18 +4,32 @@
  * 
  * React hook that connects to the CartService Singleton
  * Provides real-time state updates through Observer Pattern
+ * ✅ SECURITY: User-specific cart management
  */
 
 import { useEffect, useState, useCallback } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import CartService from '../services/CartService';
 
 /**
  * Hook to use CartService Singleton in React components
  * Automatically syncs with Singleton instance
+ * ✅ Automatically switches cart when user changes
  */
 export const useCartSingleton = () => {
+  const auth = useAuth();
+  const currentUserEmail = auth?.user?.email || auth?.currentUser?.email || auth?.email || null;
+  
   const [items, setItems] = useState([]);
   const [summary, setSummary] = useState({});
+
+  // ✅ SECURITY: Set current user in CartService when user changes
+  useEffect(() => {
+    if (currentUserEmail) {
+      CartService.setCurrentUser(currentUserEmail);
+      console.log(`✅ [useCartSingleton] User set in CartService: ${currentUserEmail}`);
+    }
+  }, [currentUserEmail]);
 
   // Initialize with current cart state
   useEffect(() => {

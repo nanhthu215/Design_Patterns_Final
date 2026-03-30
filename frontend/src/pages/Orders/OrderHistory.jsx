@@ -59,12 +59,17 @@ const OrderHistory = () => {
       setLoading(true);
       setError("");
 
+      // ✅ SECURITY: Email is now required (no longer optional)
+      if (!userEmail) {
+        setError("⚠️ Email is required to view orders. Please ensure you are logged in.");
+        setOrders([]);
+        return;
+      }
+
       const params = new URLSearchParams();
       params.set("limit", "20");
       params.set("includeItems", "true");
-      if (userEmail) {
-        params.set("email", userEmail);
-      }
+      params.set("email", userEmail); // ✅ REQUIRED
 
       const url = `${API_BASE_URL}/api/orders?${params.toString()}`;
 
@@ -78,8 +83,13 @@ const OrderHistory = () => {
 
       if (!res.ok) {
         const text = await res.text();
+        const errorMsg = text.match(/"message":"([^"]+)"/) ? RegExp.$1 : text;
+        
+        if (res.status === 400) {
+          throw new Error(`❌ ${errorMsg || "Invalid request: Email filter is required"}`);
+        }
         throw new Error(
-          "Failed to fetch order list (status " + res.status + ")"
+          `Failed to fetch order list (status ${res.status}): ${errorMsg || ""}`
         );
       }
 
@@ -97,6 +107,9 @@ const OrderHistory = () => {
         : data.data || data.items || [];
 
       setOrders(list);
+      if (list.length === 0) {
+        setError("No orders found for your account."); 
+      }
     } catch (err) {
       setError(err.message || "An error occurred while loading orders.");
     } finally {

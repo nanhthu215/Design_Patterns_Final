@@ -9,17 +9,12 @@ const { OrderDAO, DAOFactory } = require('../services/DataStorageService');
 
 class OrderRepository {
   constructor(OrderModel, CustomerModel, DiscountCodeModel) {
-    // Auto-require models if not provided (backward compatibility)
-    const Order = OrderModel || require('../models/Order');
-    const Customer = CustomerModel || require('../models/Customer');
-    const DiscountCode = DiscountCodeModel || require('../models/DiscountCode');
-    
-    this.adapter = new MongooseRepositoryAdapter(Order);
-    this.Order = Order;
-    this.Customer = Customer;
-    this.DiscountCode = DiscountCode;
+    this.adapter = new MongooseRepositoryAdapter(OrderModel);
+    this.Order = OrderModel;
+    this.Customer = CustomerModel;
+    this.DiscountCode = DiscountCodeModel;
     this.daoFactory = new DAOFactory();
-    this.orderDAO = this.daoFactory.createDAO('Order', Order, Customer);
+    this.orderDAO = this.daoFactory.createDAO('Order', OrderModel, CustomerModel);
   }
 
   /**

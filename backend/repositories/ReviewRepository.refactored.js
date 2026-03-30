@@ -8,10 +8,8 @@ const MongooseRepositoryAdapter = require('../core/adapters/MongooseRepositoryAd
 
 class ReviewRepository {
   constructor(ReviewModel) {
-    // Auto-require model if not provided (backward compatibility)
-    const Model = ReviewModel || require('../models/Review');
-    this.adapter = new MongooseRepositoryAdapter(Model);
-    this.model = Model;
+    this.adapter = new MongooseRepositoryAdapter(ReviewModel);
+    this.model = ReviewModel;
   }
 
   /**

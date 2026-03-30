@@ -9,10 +9,8 @@ const ProductFactory = require('../services/ProductFactory');
 
 class ProductRepository {
   constructor(ProductModel) {
-    // Auto-require model if not provided (backward compatibility)
-    const Model = ProductModel || require('../models/Product');
-    this.adapter = new MongooseRepositoryAdapter(Model);
-    this.model = Model;
+    this.adapter = new MongooseRepositoryAdapter(ProductModel);
+    this.model = ProductModel;
   }
 
   /**

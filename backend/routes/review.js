@@ -1,6 +1,6 @@
 /**
  * backend/routes/reviews.js
- * Review API routes with OBSERVER PATTERN integration
+ * Review API routes with PURE OBSERVER PATTERN integration
  */
 
 const express = require('express');
@@ -8,9 +8,11 @@ const router = express.Router();
 const ReviewController = require('../controllers/ReviewController');
 const ReviewRepository = require('../repositories/ReviewRepository');
 const Review = require('../models/Review');
+const ReviewObserver = require('../core/services/ReviewObserver');
 
 const reviewRepository = new ReviewRepository(Review);
-const reviewController = new ReviewController(reviewRepository);
+const reviewObserver = ReviewObserver.getInstance();
+const reviewController = new ReviewController(reviewRepository, reviewObserver);
 
 // ✅ POST - Create review (OBSERVER BROADCASTS)
 router.post('/', (req, res, next) => reviewController.create(req, res, next));

@@ -1,106 +1,67 @@
-# Phân Tích 4 Design Patterns – E-Commerce Web Application
+# Tài Liệu Phân Tích Design Patterns – E-Commerce Web Application
+
+Tài liệu này phân tích chi tiết 6 mẫu thiết kế (Design Patterns) chủ đạo được áp dụng trong hệ thống, bao gồm cách sử dụng, vị trí file, cấu trúc Class, các phương thức, thuộc tính và mối quan hệ để phục vụ việc vẽ Class Diagram và hiện thực mã nguồn.
 
 ---
 
 ## 1. Factory Pattern – Tạo đối tượng sản phẩm
 
-### 1.1 Class Diagram
+### 1.1 Phân tích & Vị trí
+Trong hệ thống E-Commerce, sản phẩm có nhiều loại khác nhau (Cà phê, Phụ kiện, Combo). Mỗi loại có các thuộc tính mặc định, tiền tố SKU và logic khởi tạo riêng. Factory Pattern giúp tách biệt logic khởi tạo đối tượng khỏi client, cho phép dễ dàng mở rộng các loại sản phẩm mới mà không cần sửa đổi mã nguồn ở nhiều nơi.
 
+*   **Vị trí:** `backend/services/ProductFactory.js`
+
+### 1.2 Bảng Cấu Trúc Class
+| Role | Tên Class/Object | Ý nghĩa |
+|---|---|---|
+| **Creator** | `ProductFactory` | Class chứa logic `static` để quyết định loại sản phẩm nào sẽ được tạo dựa trên tham số `type`. |
+| **Product Interface** | `Product` | Cấu trúc dữ liệu chung (ngầm định) mà mọi đối tượng sản phẩm phải tuân thủ. |
+| **Concrete Product** | `CoffeeProduct` | Đối tượng sản phẩm loại Cà phê (SKU: COF-). |
+| **Concrete Product** | `AccessoryProduct` | Đối tượng sản phẩm loại Phụ kiện (SKU: ACC-). |
+| **Concrete Product** | `ComboProduct` | Đối tượng sản phẩm loại Combo (SKU: CMB-). |
+
+### 1.3 Phương thức & Thuộc tính
+| Class | Thành phần | Mô tả |
+|---|---|---|
+| `ProductFactory` | `createProduct(type, payload)` | Phương thức `static` nhận loại sản phẩm và dữ liệu đầu vào để trả về một `Product` object tương ứng. |
+| `Product` | `category`, `name`, `price`, `sku`, `stock` | Các thuộc tính cơ bản mà mọi sản phẩm đều có. |
+
+### 1.4 Mối Quan Hệ
+| Mối quan hệ | Ký hiệu | Giải thích |
+|---|---|---|
+| **Dependency (creates)** | `ProductFactory ..> Product` | Factory tạo ra các thực thể của `Product`, Factory biết Product nhưng Product không biết Factory. |
+| **Realization** | `Product <|.. ConcreteProducts` | Các loại sản phẩm cụ thể (Coffee, Accessory, etc.) hiện thực các đặc tính của Product. |
+
+### 1.5 Class Diagram (Sơ đồ lớp)
 ```mermaid
 classDiagram
     class ProductFactory {
         <<Creator>>
-        +createProduct(type: string, payload: Object)$ Product
+        +createProduct(type: String, payload: Object)$ Object
     }
-
     class Product {
-        <<interface>>
-        +category: string
-        +name: string
-        +price: number
-        +stock: boolean
-        +sku: string
-        +description: string
-        +variants: Array~Object~
+        <<Interface>>
+        +category: String
+        +name: String
+        +price: Number
+        +sku: String
     }
-
     class CoffeeProduct {
         <<ConcreteProduct>>
         +category: "coffee"
-        +name: string = "Cà phê đặc biệt"
-        +price: number = 50000
-        +stock: boolean = true
-        +sku: string = "COF-{timestamp}"
-        +description: string = "Cà phê nguyên chất"
-        +variants: Array~Object~ = []
+        +sku: "COF-..."
     }
-
     class AccessoryProduct {
         <<ConcreteProduct>>
         +category: "accessory"
-        +name: string = "Phụ kiện"
-        +price: number = 150000
-        +stock: boolean = true
-        +sku: string = "ACC-{timestamp}"
-        +description: string = "Phụ kiện đi kèm"
-        +variants: Array~Object~ = []
+        +sku: "ACC-..."
     }
-
-    class ComboProduct {
-        <<ConcreteProduct>>
-        +category: "combo"
-        +name: string = "Combo"
-        +price: number = 200000
-        +stock: boolean = true
-        +sku: string = "CMB-{timestamp}"
-        +description: string = "Combo tiết kiệm"
-        +variants: Array~Object~ = []
-    }
-
-    class GeneralProduct {
-        <<ConcreteProduct>>
-        +category: string = "general"
-        +name: string = "Sản phẩm chung"
-        +price: number = 100000
-        +stock: boolean = true
-        +sku: string = "PRD-{timestamp}"
-        +description: string = ""
-        +variants: Array~Object~ = []
-    }
-
+    ProductFactory ..> Product : creates
     Product <|.. CoffeeProduct : implements
     Product <|.. AccessoryProduct : implements
-    Product <|.. ComboProduct : implements
-    Product <|.. GeneralProduct : implements
-    ProductFactory ..> Product : creates
-    ProductFactory ..> CoffeeProduct : «type = coffee»
-    ProductFactory ..> AccessoryProduct : «type = accessory»
-    ProductFactory ..> ComboProduct : «type = combo»
-    ProductFactory ..> GeneralProduct : «type = default»
 ```
 
-### 1.2 Giải thích các thành phần
-
-| Thành phần | Loại class | Vai trò |
-|---|---|---|
-| `ProductFactory` | **Creator** (Static Factory) | Chứa logic `switch/case` để quyết định tạo loại sản phẩm nào |
-| `Product` | **Interface** (ngầm định) | Cấu trúc chung mà tất cả sản phẩm đều tuân theo |
-| `CoffeeProduct` | **Concrete Product** | Sản phẩm cà phê – SKU prefix `COF-`, giá mặc định 50.000₫ |
-| `AccessoryProduct` | **Concrete Product** | Phụ kiện – SKU prefix `ACC-`, giá mặc định 150.000₫ |
-| `ComboProduct` | **Concrete Product** | Combo – SKU prefix `CMB-`, giá mặc định 200.000₫ |
-| `GeneralProduct` | **Concrete Product** | Sản phẩm chung (fallback) – SKU prefix `PRD-` |
-
-### 1.3 Quan hệ giữa các class
-
-| Quan hệ | Ký hiệu | Giải thích |
-|---|---|---|
-| `ProductFactory ..> Product` | **Dependency (creates)** | Factory tạo ra các Product – quan hệ phụ thuộc, Factory biết Product nhưng Product không biết Factory |
-| `Product <\|.. ConcreteProducts` | **Realization (implements)** | Các Concrete Product hiện thực cấu trúc của Product interface |
-
-### 1.4 Hiện thực
-
-**File:** `backend/services/ProductFactory.js`
-
+### 1.6 Hiện Thực Mẫu
 ```javascript
 class ProductFactory {
   static createProduct(type, payload = {}) {
@@ -108,23 +69,18 @@ class ProductFactory {
       case 'coffee':
         return {
           category: 'coffee',
-          name: payload.name || 'Cà phê đặc biệt',
-          price: payload.price || 50000,
-          stock: payload.stock !== undefined ? payload.stock : true,
           sku: payload.sku || `COF-${Date.now()}`,
-          description: payload.description || 'Cà phê nguyên chất',
-          variants: payload.variants || [],
-          ...payload,
+          price: payload.price || 50000,
+          ...payload
         };
       case 'accessory':
-        return { category: 'accessory', name: payload.name || 'Phụ kiện',
-                 price: payload.price || 150000, sku: payload.sku || `ACC-${Date.now()}`, ...payload };
-      case 'combo':
-        return { category: 'combo', name: payload.name || 'Combo',
-                 price: payload.price || 200000, sku: payload.sku || `CMB-${Date.now()}`, ...payload };
+        return {
+          category: 'accessory',
+          sku: payload.sku || `ACC-${Date.now()}`,
+          ...payload
+        };
       default:
-        return { category: payload.category || 'general', name: payload.name || 'Sản phẩm chung',
-                 price: payload.price || 100000, sku: payload.sku || `PRD-${Date.now()}`, ...payload };
+        return { category: 'general', ...payload };
     }
   }
 }
@@ -134,128 +90,60 @@ class ProductFactory {
 
 ## 2. Singleton Pattern – Quản lý giỏ hàng
 
-### 2.1 Class Diagram
+### 2.1 Phân tích & Vị trí
+Giỏ hàng cần được quản lý tập trung để đảm bảo tính đồng nhất dữ liệu trên toàn ứng dụng. Singleton Pattern đảm bảo chỉ có một instance duy nhất của `CartService` tồn tại trong suốt phiên làm việc, tránh việc tạo nhiều bản sao gây sai lệch số lượng sản phẩm giữa các trang.
 
+*   **Vị trí:** `frontend/src/core/services/CartService.js`
+
+### 2.2 Bảng Cấu Trúc Class
+| Role | Tên Class | Ý nghĩa |
+|---|---|---|
+| **Singleton** | `CartService` | Quản lý logic giỏ hàng, lưu trữ instance duy nhất trong biến private static `#instance`. |
+| **Adapter (Storage)** | `CartStore` | Interface cho việc lưu trữ (LocalStorageAdapter), được inject vào CartService. |
+
+### 2.3 Phương thức & Thuộc tính
+| Class | Thành phần | Mô tả | Kiểu dữ liệu |
+|---|---|---|---|
+| `CartService` | `#instance` | Biến static private lưu trữ instance duy nhất. | `CartService` |
+| `CartService` | `getInstance()` | Phương thức static công khai để lấy instance duy nhất. | `CartService` |
+| `CartService` | `addToCart(item)` | Thêm sản phẩm vào giỏ hàng duy nhất này. | `Promise<void>` |
+| `CartService` | `getItems()` | Lấy danh sách item từ storage của instance. | `Promise<Array>` |
+
+### 2.4 Mối Quan Hệ
+| Mối quan hệ | Ký hiệu | Giải thích |
+|---|---|---|
+| **Self-reference** | `CartService --> CartService` | `CartService` giữ tham chiếu đến chính nó qua `#instance`. |
+| **Aggregation (DI)** | `CartService o--> CartStore` | `CartService` chứa một `CartStore` được tiêm (inject) từ ngoài vào. |
+
+### 2.5 Class Diagram (Sơ đồ lớp)
 ```mermaid
 classDiagram
     class CartService {
         <<Singleton>>
-        -instance$: CartService = null
-        -storage$: CartStore = null
-        -currentUser$: string = null
-        -observers$: Map~string, Function[]~ = new Map()
+        -instance: CartService$
+        -storage: CartStore$
         +getInstance()$ CartService
-        +setStorage(storage: CartStore)$ void
-        +setCurrentUser(email: string)$ void
-        +reset()$ void
-        +getItems() Promise~Array~CartItem~~
-        +addToCart(payload: CartItem) Promise~void~
-        +removeFromCart(key: string) Promise~void~
-        +updateQuantity(key: string, qty: number) Promise~void~
-        +getTotal() Promise~number~
-        +getItemCount() Promise~number~
-        +hasItem(key: string) Promise~boolean~
-        +clearCart() Promise~void~
-        +subscribe(callback: Function) Function
-        -_getStorageKey(email: string)$ string
-        -_saveItems(items: Array) Promise~void~
-        -_notifyObservers(items: Array) void
-        -_normalizeQty(qty: number, stock: number) number
+        +setStorage(storage: CartStore)$
+        +addToCart(payload: Object)
+        +getItems() Promise
     }
-
-    class CartStore {
-        <<interface>>
-        +getItems(userKey: string)* Promise~Array~
-        +setItems(userKey: string, items: Array)* Promise~void~
-        +clear(userKey: string)* Promise~void~
-        +subscribe(userKey: string, callback: Function)* Function
-    }
-
-    class LocalStorageAdapter {
-        <<ConcreteAdapter>>
-        +name: string = "LocalStorageAdapter"
-        +getItems(userKey: string) Promise~Array~
-        +setItems(userKey: string, items: Array) Promise~void~
-        +clear(userKey: string) Promise~void~
-        +subscribe(userKey: string, callback: Function) Function
-    }
-
-    class CartItem {
-        <<DataObject>>
-        +key: string
-        +productId: string
-        +name: string
-        +price: number
-        +image: string
-        +variant: Object
-        +category: string
-        +stock: number
-        +qty: number
-        +basePrice: number
-        +variantOptions: Array
-        +variantIndex: number
-    }
-
-    CartService o--> "0..1" CartStore : storage (DI)
-    CartService --> "0..*" CartItem : manages
-    CartService --> CartService : «static #instance»
-    LocalStorageAdapter --|> CartStore : extends
+    CartService --> CartService : static instance
 ```
 
-### 2.2 Giải thích các thành phần
-
-| Thành phần | Loại class | Vai trò |
-|---|---|---|
-| `CartService` | **Singleton** | Đảm bảo chỉ 1 instance qua `static #instance` + `getInstance()` |
-| `CartStore` | **Interface (Abstract)** | Contract cho storage – tất cả method throw Error nếu không override |
-| `LocalStorageAdapter` | **Concrete Adapter** | Hiện thực `CartStore` bằng `window.localStorage` |
-| `CartItem` | **Data Object** | Cấu trúc dữ liệu của 1 item trong giỏ hàng |
-
-### 2.3 Quan hệ giữa các class
-
-| Quan hệ | Ký hiệu | Giải thích |
-|---|---|---|
-| `CartService o--> CartStore` | **Aggregation (DI)** | CartService chứa CartStore nhưng không tạo ra nó – inject từ bên ngoài qua `setStorage()` |
-| `CartService --> CartService` | **Self-reference (Singleton)** | `static #instance` trỏ về chính mình |
-| `LocalStorageAdapter --\|> CartStore` | **Inheritance (extends)** | Kế thừa và override tất cả method abstract |
-| `CartService --> CartItem` | **Association (manages)** | Quản lý collection các CartItem |
-
-### 2.4 Hiện thực
-
-**Files:** `frontend/src/core/services/CartService.js`, `frontend/src/core/interfaces/CartStore.js`, `frontend/src/core/adapters/LocalStorageAdapter.js`
-
+### 2.6 Hiện Thực Mẫu
 ```javascript
-// ========== CartService (Singleton) ==========
 class CartService {
-  static #instance = null;   // Private static – chỉ 1 instance
-  static #storage = null;    // Storage adapter (DI)
-  static #observers = new Map();
+  static #instance = null;
+  static #storage = null;
 
   static getInstance() {
     if (!CartService.#instance) {
       CartService.#instance = new CartService();
     }
-    return CartService.#instance;  // Luôn trả cùng 1 object
+    return CartService.#instance;
   }
-
+  
   static setStorage(storage) { CartService.#storage = storage; }
-}
-
-// ========== CartStore (Interface) ==========
-class CartStore {
-  async getItems(userKey) { throw new Error('Must implement'); }
-  async setItems(userKey, items) { throw new Error('Must implement'); }
-  async clear(userKey) { throw new Error('Must implement'); }
-}
-
-// ========== LocalStorageAdapter (Concrete) ==========
-class LocalStorageAdapter extends CartStore {
-  async getItems(userKey) {
-    return JSON.parse(localStorage.getItem(userKey)) || [];
-  }
-  async setItems(userKey, items) {
-    localStorage.setItem(userKey, JSON.stringify(items));
-  }
 }
 ```
 
@@ -263,351 +151,185 @@ class LocalStorageAdapter extends CartStore {
 
 ## 3. Observer Pattern – Cập nhật giao diện giỏ hàng
 
-### 3.1 Class Diagram
+### 3.1 Phân tích & Vị trí
+Khi giỏ hàng thay đổi (thêm/xóa/sửa), các thành phần giao diện (UI) như Badge trên Navbar hay trang Cart Page cần cập nhật ngay. Observer Pattern giúp `CartService` thông báo cho các Subscriber (Context/UI) mà không cần can thiệp sâu vào code giao diện.
 
+*   **Vị trí:** `backend/core/patterns/Observer.js` (Lớp cơ sở) và `frontend/src/contexts/CartContext.jsx`.
+
+### 3.2 Bảng Cấu Trúc Class
+| Role | Tên Class/Component | Ý nghĩa |
+|---|---|---|
+| **Subject (Observable)** | `CartService` | Nơi quản lý dữ liệu gốc và danh sách các hàm callback (observers). |
+| **Concrete Observer** | `CartContext` | Đăng ký lắng nghe sự thay đổi từ `CartService` để cập nhật React state. |
+| **Subscriber UI** | `NavBar / CartPage` | Các React component hiển thị dữ liệu mới khi state thay đổi. |
+
+### 3.3 Phương thức & Thuộc tính
+| Class | Thành phần | Mô tả |
+|---|---|---|
+| `CartService` | `subscribe(callback)` | Cho phép UI đăng ký hàm cập nhật vào danh sách thông báo. |
+| `CartService` | `_notifyObservers(data)` | Duyệt qua danh sách các callbacks khi có thay đổi để thực thi chúng. |
+| `CartContext` | `setItems(items)` | Hàm cập nhật state trong React, gây ra việc render lại toàn bộ UI liên quan. |
+
+### 3.4 Mối Quan Hệ
+| Mối quan hệ | Ý nghĩa |
+|---|---|
+| **Loose Coupling** | `CartService` không biết về React UI, nó chỉ giữ các hàm callback ẩn danh. |
+
+### 3.5 Class Diagram (Sơ đồ lớp)
 ```mermaid
 classDiagram
-    class Observer {
-        <<Generic Subject>>
-        -listeners: Set~Function~
-        +subscribe(callback: Function) Function
-        +unsubscribe(callback: Function) void
-        +notify(data: any) void
-        +clear() void
-        +getListenerCount() number
+    class Subject {
+        -observers: Map
+        +subscribe(callback: Function)
+        #notify(data: Array)
     }
-
     class CartService {
         <<ConcreteSubject>>
-        -observers$: Map~string, Function[]~
-        +subscribe(callback: Function) Function
-        -_notifyObservers(items: Array) void
-        +addToCart(payload: Object) Promise~void~
-        +removeFromCart(key: string) Promise~void~
-        +updateQuantity(key: string, qty: number) Promise~void~
-        +clearCart() Promise~void~
+        +addToCart(item)
     }
-
     class CartContext {
-        <<ConcreteObserver - React>>
-        -items: Array~CartItem~
-        -setItems: Function
-        -isInitialized: boolean
-        +CartProvider(children: ReactNode) JSX
-        +addToCart(payload: Object) Promise~void~
-        +removeFromCart(key: string) Promise~void~
-        +clearCart() Promise~void~
-        +increaseQty(key: string) void
-        +decreaseQty(key: string) void
-        +updateItemVariant(key: string, payload: Object) Promise~void~
+        <<Observer>>
+        +reRender(data)
     }
-
-    class useCart {
-        <<Hook - Accessor>>
-        +items: Array~CartItem~
-        +addToCart: Function
-        +removeFromCart: Function
-        +clearCart: Function
-        +increaseQty: Function
-        +decreaseQty: Function
-    }
-
-    class ReactUI {
-        <<View Components>>
-        +NavBar: badge count
-        +CartPage: item list
-        +ProductCard: add button
-    }
-
-    Observer <|.. CartService : implements same pattern
-    CartService ..> CartContext : notifies via callback
-    CartContext ..> ReactUI : triggers re-render via setItems
-    CartContext --> useCart : provides via Context API
-    ReactUI --> useCart : consumes
-```
-
-### 3.2 Giải thích các thành phần
-
-| Thành phần | Loại class | Vai trò trong Observer |
-|---|---|---|
-| `Observer` | **Generic Subject** (thuần OOP) | Class backend – quản lý `Set` listeners, `subscribe/notify/unsubscribe` |
-| `CartService` | **Concrete Subject** | Tích hợp Observer – khi cart thay đổi → `_notifyObservers()` |
-| `CartContext` | **Concrete Observer** | Subscribe vào CartService – nhận callback → cập nhật React state |
-| `useCart` | **Hook (accessor)** | Cung cấp dữ liệu giỏ hàng cho React components |
-| `ReactUI` | **View** | Tự động re-render khi `items` thay đổi |
-
-### 3.3 Quan hệ giữa các class
-
-| Quan hệ | Ký hiệu | Giải thích |
-|---|---|---|
-| `Observer <\|.. CartService` | **Realization** | CartService hiện thực vai trò Subject (pub/sub) |
-| `CartService ..> CartContext` | **Dependency (notifies)** | Thông báo qua callback – quan hệ lỏng (loose coupling) |
-| `CartContext ..> ReactUI` | **Dependency (re-render)** | Trigger re-render qua `setItems()` |
-| `CartContext --> useCart` | **Association (provides)** | Cung cấp data/methods qua React Context API |
-
-### 3.4 Luồng hoạt động
-
-```
-User click "Thêm vào giỏ"
-  → CartService.addToCart(payload)
-    → _saveItems(items)          // lưu vào storage
-    → _notifyObservers(items)    // gọi TẤT CẢ callback
-      → CartContext callback: setItems(updatedItems)
-        → React state change
-          → NavBar badge cập nhật số lượng
-          → CartPage re-render danh sách mới
-```
-
-### 3.5 Hiện thực
-
-**Files:** `backend/core/patterns/Observer.js`, `frontend/src/core/services/CartService.js`, `frontend/src/contexts/CartContext.jsx`
-
-```javascript
-// ========== Observer.js (Generic – backend) ==========
-class Observer {
-  constructor() { this.listeners = new Set(); }
-
-  subscribe(callback) {
-    this.listeners.add(callback);
-    return () => this.unsubscribe(callback);
-  }
-
-  notify(data) {
-    for (const listener of this.listeners) {
-      try { listener(data); }
-      catch (error) { console.error('Observer error:', error); }
-    }
-  }
-}
-
-// ========== CartService – Subject (frontend) ==========
-class CartService {
-  static #observers = new Map();
-
-  subscribe(callback) {
-    const userKey = CartService._getStorageKey();
-    CartService.#observers.get(userKey).push(callback);
-    return () => { /* unsubscribe */ };
-  }
-
-  _notifyObservers(items) {
-    const callbacks = CartService.#observers.get(userKey) || [];
-    callbacks.forEach((cb) => cb(items));
-  }
-
-  async addToCart(payload) {
-    await this._saveItems(items);
-    this._notifyObservers(items);  // ← TRIGGER
-  }
-}
-
-// ========== CartContext.jsx – Observer (React) ==========
-const CartProvider = ({ children }) => {
-  const [items, setItems] = useState([]);
-
-  useEffect(() => {
-    const unsubscribe = cartService.subscribe((updatedItems) => {
-      setItems(updatedItems);  // ← UI RE-RENDER
-    });
-    return unsubscribe;
-  }, [currentUserEmail]);
-};
+    Subject <|-- CartService
+    CartService ..> CartContext : calls callback
 ```
 
 ---
 
 ## 4. Strategy Pattern – Quản lý phương thức thanh toán
 
-### 4.1 Class Diagram
+### 4.1 Phân tích & Vị trí
+Sản phẩm hỗ trợ 3 loại thanh toán: Thẻ tín dụng, Chuyển khoản, Ví điện tử. Mỗi loại có quy định kiểm tra dữ liệu và API xử lý khác nhau. Strategy Pattern cho phép Controller thay đổi thuật toán xử lý linh hoạt tùy vào lựa chọn của người dùng.
 
+*   **Vị trí:** `backend/strategies/` và `backend/strategies/PaymentProcessor.js`.
+
+### 4.2 Bảng Cấu Trúc Class
+| Role | Tên Class | Ý nghĩa |
+|---|---|---|
+| **Strategy (Abstract)** | `PaymentStrategy` | Lớp trừu tượng (hoặc interface) định nghĩa các methods chung. |
+| **Concrete Strategy** | `CreditCardPayment` | Xử lý thanh toán thẻ (xác thực số thẻ, expiry, CVV). |
+| **Concrete Strategy** | `BankTransferPayment` | Xử lý thanh toán chuyển khoản ngân hàng. |
+| **Concrete Strategy** | `EWalletPayment` | Xử lý thanh toán ví điện tử (PayPal, Momo...). |
+| **Context** | `PaymentProcessor` | Lớp trung gian giữ strategy hiện tại và thực thi các method delegate. |
+
+### 4.3 Phương thức & Thuộc tính
+| Class | Thành phần | Mô tả |
+|---|---|---|
+| `PaymentStrategy` | `processPayment(details, amount)` | Method trừu tượng phải được các lớp con hiện thực. |
+| `PaymentProcessor` | `setStrategy(strategy)` | Giúp thay đổi thuật toán thanh toán tại thời điểm chạy (runtime). |
+
+### 4.4 Class Diagram (Sơ đồ lớp)
 ```mermaid
 classDiagram
-    class PaymentProcessor {
-        <<Context>>
-        -strategy: PaymentStrategy
-        +constructor(strategy: PaymentStrategy)
-        +setStrategy(strategy: PaymentStrategy) void
-        +getStrategyByType(method: string) PaymentStrategy
-        +processPayment(method: string, details: Object, amount: number) Promise~PaymentResult~
-        +refundPayment(txId: string, amount: number) Promise~RefundResult~
-        +getSupportedPaymentMethods() string[]
-    }
-
     class PaymentStrategy {
         <<abstract>>
-        +processPayment(details: Object, amount: number)* Promise~PaymentResult~
-        +validatePaymentDetails(details: Object)* boolean
-        +refund(txId: string, amount: number)* Promise~RefundResult~
+        +processPayment(details, amount)*
+        +validateDetails(details)*
     }
-
     class CreditCardPayment {
-        <<ConcreteStrategy>>
-        +paymentMethod: string = "credit_card"
-        +processPayment(details: CreditCardDetails, amount: number) Promise~PaymentResult~
-        +validatePaymentDetails(details: CreditCardDetails) boolean
-        +refund(txId: string, amount: number) Promise~RefundResult~
-        -_generateTransactionId() string
-        -_simulatePaymentProcessing() Promise~void~
+        +processPayment(details, amount)
     }
-
-    class BankTransferPayment {
-        <<ConcreteStrategy>>
-        +paymentMethod: string = "bank_transfer"
-        +processPayment(details: BankDetails, amount: number) Promise~PaymentResult~
-        +validatePaymentDetails(details: BankDetails) boolean
-        +refund(txId: string, amount: number) Promise~RefundResult~
-        -_generateTransactionId() string
-        -_simulatePaymentProcessing() Promise~void~
-    }
-
     class EWalletPayment {
-        <<ConcreteStrategy>>
-        +paymentMethod: string = "ewallet"
-        +supportedWallets: string[] = ["PayPal","Google Pay","Apple Pay","Momo","ZaloPay","VNPay"]
-        +processPayment(details: WalletDetails, amount: number) Promise~PaymentResult~
-        +validatePaymentDetails(details: WalletDetails) boolean
-        +refund(txId: string, amount: number) Promise~RefundResult~
-        -_isValidEmail(email: string) boolean
-        -_isValidPhone(phone: string) boolean
-        -_generateTransactionId() string
-        -_simulatePaymentProcessing() Promise~void~
+        +processPayment(details, amount)
     }
-
-    class CreditCardDetails {
-        <<DataObject>>
-        +cardNumber: string
-        +expiryDate: string
-        +cvv: string
-        +cardholderName: string
+    class PaymentProcessor {
+        -strategy: PaymentStrategy
+        +setStrategy(strategy)
+        +processPayment(method, details, amount)
     }
-
-    class BankDetails {
-        <<DataObject>>
-        +accountNumber: string
-        +bankCode: string
-        +accountHolderName: string
-    }
-
-    class WalletDetails {
-        <<DataObject>>
-        +walletType: string
-        +walletEmail: string
-        +walletPhone: string
-    }
-
-    class PaymentResult {
-        <<DataObject>>
-        +success: boolean
-        +transactionId: string
-        +paymentMethod: string
-        +amount: number
-        +timestamp: string
-        +status: string
-    }
-
-    class OrderController {
-        <<Client>>
-        -paymentProcessor: PaymentProcessor
-        +create(req, res, next) Promise~void~
-    }
-
-    PaymentStrategy <|-- CreditCardPayment : extends
-    PaymentStrategy <|-- BankTransferPayment : extends
-    PaymentStrategy <|-- EWalletPayment : extends
-    PaymentProcessor o--> "1" PaymentStrategy : strategy
-    PaymentProcessor ..> CreditCardPayment : creates
-    PaymentProcessor ..> BankTransferPayment : creates
-    PaymentProcessor ..> EWalletPayment : creates
-    CreditCardPayment ..> CreditCardDetails : validates
-    BankTransferPayment ..> BankDetails : validates
-    EWalletPayment ..> WalletDetails : validates
-    CreditCardPayment ..> PaymentResult : returns
-    BankTransferPayment ..> PaymentResult : returns
-    EWalletPayment ..> PaymentResult : returns
-    OrderController --> PaymentProcessor : uses
+    PaymentStrategy <|-- CreditCardPayment
+    PaymentStrategy <|-- EWalletPayment
+    PaymentProcessor o-- PaymentStrategy
 ```
 
-### 4.2 Giải thích các thành phần
+---
 
-| Thành phần | Loại class | Vai trò |
+## 5. Repository & DAO Pattern – Lưu trữ dữ liệu
+
+### 5.1 Phân tích & Vị trí
+Đây là tầng hạ tầng quản lý Database. DAO (Data Access Object) xử lý các câu lệnh SQL/Mongoose. Repository bọc lấy DAO để cung cấp một API mức cao cho Controller. Hệ thống còn áp dụng **Singleton** để quản lý Connection Pool và Cache bộ nhớ.
+
+*   **Vị trí:** `backend/services/DataStorageService.js` và các file trong `backend/repositories/`.
+
+### 5.2 Bảng Cấu Trúc Class
+| Role | Tên Class | Ý nghĩa |
 |---|---|---|
-| `PaymentProcessor` | **Context** | Nắm giữ reference tới strategy, delegate thanh toán |
-| `PaymentStrategy` | **Abstract Strategy** | 3 method abstract: `processPayment`, `validatePaymentDetails`, `refund` |
-| `CreditCardPayment` | **Concrete Strategy** | Thẻ tín dụng – validate card (≥13 digits), expiry (MM/YY), CVV (3-4 digits) |
-| `BankTransferPayment` | **Concrete Strategy** | Chuyển khoản – validate account (≥8 digits), bank code |
-| `EWalletPayment` | **Concrete Strategy** | Ví điện tử – hỗ trợ PayPal, Momo, ZaloPay, VNPay... |
-| `OrderController` | **Client** | Sử dụng `PaymentProcessor` khi tạo đơn hàng |
+| **Template Class** | `BaseDAO` | Chứa các logic CRUD dùng chung và tích hợp Caching tự động. |
+| **Concrete Class** | `OrderDAO / ProductDAO` | Mở rộng BaseDAO để xử lý logic riêng cho từng bảng. |
+| **Singleton Pool** | `ConnectionPoolManager` | Đảm bảo duy trì và tái sử dụng tối đa 10 kết nối MongoDB. |
+| **Singleton Cache** | `CacheManager` | Quản lý bộ phận lưu trữ đệm trong RAM với cơ chế hết hạn (TTL). |
+| **Factory DAO** | `DAOFactory` | Chịu trách nhiệm tạo ra các instance DAO đúng loại từ Model Name. |
 
-### 4.3 Quan hệ giữa các class
+### 5.3 Mối Quan Hệ
+| Mối quan hệ | Ý nghĩa |
+|---|---|
+| **Aggregation** | `BaseDAO` sử dụng `CacheManager` để kiểm tra dữ liệu trước khi vào DB. |
+| **Inheritance** | `OrderDAO` kế thừa toàn bộ phương thức CRUD từ `BaseDAO`. |
 
-| Quan hệ | Ký hiệu | Giải thích |
-|---|---|---|
-| `PaymentStrategy <\|-- ConcreteStrategies` | **Inheritance (extends)** | 3 concrete strategy kế thừa và override method abstract |
-| `PaymentProcessor o--> PaymentStrategy` | **Aggregation** | Context chứa 1 strategy – thay đổi runtime qua `setStrategy()` |
-| `PaymentProcessor ..> ConcreteStrategies` | **Dependency (creates)** | Tạo strategy qua `getStrategyByType()` |
-| `OrderController --> PaymentProcessor` | **Association (uses)** | Controller dùng Processor khi tạo đơn |
-
-### 4.4 Hiện thực
-
-**Files:** `backend/strategies/PaymentStrategy.js`, `CreditCardPayment.js`, `BankTransferPayment.js`, `EWalletPayment.js`, `PaymentProcessor.js`
-
-```javascript
-// ========== PaymentStrategy (Abstract) ==========
-class PaymentStrategy {
-  async processPayment(details, amount) { throw new Error('Must implement'); }
-  validatePaymentDetails(details) { throw new Error('Must implement'); }
-  async refund(txId, amount) { throw new Error('Must implement'); }
-}
-
-// ========== CreditCardPayment (Concrete) ==========
-class CreditCardPayment extends PaymentStrategy {
-  constructor() { super(); this.paymentMethod = 'credit_card'; }
-
-  validatePaymentDetails({ cardNumber, expiryDate, cvv, cardholderName }) {
-    if (!cardNumber || cardNumber.replace(/\s/g, '').length < 13)
-      throw new Error('Card number is invalid');
-    if (!/^\d{2}\/\d{2}$/.test(expiryDate))
-      throw new Error('Expiry date must be MM/YY');
-    if (!/^\d{3,4}$/.test(cvv))
-      throw new Error('CVV is invalid');
-    return true;
-  }
-
-  async processPayment(details, amount) {
-    this.validatePaymentDetails(details);
-    await this._simulatePaymentProcessing();
-    return { success: true, transactionId: `CC_${Date.now()}`, amount, status: 'completed' };
-  }
-}
-
-// ========== PaymentProcessor (Context) ==========
-class PaymentProcessor {
-  constructor(strategy = null) { this.strategy = strategy; }
-
-  getStrategyByType(method) {
-    switch (method) {
-      case 'credit_card': return new CreditCardPayment();
-      case 'bank_transfer': return new BankTransferPayment();
-      case 'ewallet': return new EWalletPayment();
-      default: throw new Error(`Unknown: ${method}`);
+### 5.4 Class Diagram (Sơ đồ lớp)
+```mermaid
+classDiagram
+    class ConnectionPoolManager {
+        <<Singleton>>
+        +getConnection()$
     }
-  }
+    class CacheManager {
+        <<Singleton>>
+        +get(key)
+        +set(key, val, ttl)
+    }
+    class BaseDAO {
+        <<Abstract>>
+        -model: MongooseModel
+        +find(query)
+        #_executeWithCache()
+    }
+    class OrderDAO {
+        +getOrderStats()
+    }
+    BaseDAO <|-- OrderDAO
+    BaseDAO o-- CacheManager
+    BaseDAO o-- ConnectionPoolManager
+```
 
-  async processPayment(method, details, amount) {
-    const strategy = this.getStrategyByType(method);
-    this.setStrategy(strategy);
-    return await this.strategy.processPayment(details, amount);
+---
+
+## 6. Strategy Pattern – Xuất dữ liệu
+
+### 6.1 Phân tích & Vị trí
+Cung cấp khả năng xuất báo cáo đơn hàng định dạng CSV, JSON, XML, Excel. Mỗi định dạng là một thuật toán chuyển đổi dữ liệu mảng sang chuỗi văn bản tương ứng.
+
+*   **Vị trí:** `backend/services/DataExportService.js`.
+
+### 6.2 Bảng Cấu Trúc Class
+| Role | Tên Class | Ý nghĩa |
+|---|---|---|
+| **Abstract Strategy**| `ExportStrategy` | Chứa methods `export`, `getContentType`, `getFileExtension`. |
+| **Concrete Strategy**| `CSVExportStrategy` | Phân tách dữ liệu bằng dấu phẩy và xử lý ký tự đặc biệt. |
+| **Concrete Strategy**| `JSONExportStrategy`| Chuyển đổi dữ liệu sang định dạng JSON chuẩn. |
+| **Context Service** | `DataExportService` | Service nhận yêu cầu từ UI và phối hợp với Factory để lấy strategy. |
+
+### 6.3 Hiện Thực Mẫu
+```javascript
+class JSONExportStrategy extends ExportStrategy {
+  async export(data, options = {}) {
+    const { pretty = true } = options;
+    return JSON.stringify(data, null, pretty ? 2 : 0);
   }
+  getContentType() { return 'application/json'; }
+  getFileExtension() { return 'json'; }
 }
 ```
 
 ---
 
-## Tổng hợp
+## Tổng Kết Mối Quan Hệ Giữa Các Design Patterns
 
-| Pattern | Loại class chính | Quan hệ cốt lõi | Files |
-|---|---|---|---|
-| **Factory** | Creator → Concrete Products | Dependency (creates) | `ProductFactory.js` |
-| **Singleton** | Singleton + Interface + Adapter | Self-reference, Aggregation (DI), Inheritance | `CartService.js`, `CartStore.js`, `LocalStorageAdapter.js` |
-| **Observer** | Subject → Observer | Dependency (notifies), loose coupling | `Observer.js`, `CartService.js`, `CartContext.jsx` |
-| **Strategy** | Context → Abstract → Concrete | Aggregation, Inheritance, Dependency | `PaymentStrategy.js`, 3 strategies, `PaymentProcessor.js` |
+| Pattern | Module | Phối hợp |
+|---|---|---|
+| **Factory** | Products | Tạo ra các sản phẩm để Singleton Cart quản lý. |
+| **Singleton** | Cart | Quản lý danh sách item và là Subject cho Observer. |
+| **Observer** | UI React | Phản hồi lại mỗi khi Singleton Cart có thay đổi. |
+| **Strategy** | Payments/Export | Được Controller gọi sau khi nhận dữ liệu từ Repository tầng dưới. |
+| **Repository/DAO** | Storage | Cung cấp dữ liệu thô từ Database cho các dịch vụ Strategy xử lý. |

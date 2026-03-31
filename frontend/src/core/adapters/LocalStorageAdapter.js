@@ -6,7 +6,7 @@
  * Framework coupling isolated to this file ONLY!
  */
 
-const CartStore = require('../interfaces/CartStore');
+import CartStore from '../interfaces/CartStore';
 
 class LocalStorageAdapter extends CartStore {
   constructor() {
@@ -76,4 +76,4 @@ class LocalStorageAdapter extends CartStore {
   }
 }
 
-module.exports = LocalStorageAdapter;
+export default LocalStorageAdapter;

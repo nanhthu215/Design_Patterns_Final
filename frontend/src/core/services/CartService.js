@@ -268,4 +268,4 @@ class CartService {
   }
 }
 
-module.exports = CartService;
+export default CartService;

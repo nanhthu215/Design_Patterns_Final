@@ -83,17 +83,14 @@ class ProductRepository {
   }
 
   /**
-   * Create product using Factory pattern
-   * PURE: Business logic for product creation
+   * Create product
+   * Controller already applies Factory Pattern - repository just persists
    */
   async create(productData) {
-    // Use ProductFactory for normalization (PURE)
-    const normalized = ProductFactory.createProduct({
+    return await this.adapter.create({
       ...productData,
       createdAt: new Date(),
     });
-
-    return await this.adapter.create(normalized);
   }
 
   /**

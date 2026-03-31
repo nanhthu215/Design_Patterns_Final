@@ -1,5 +1,6 @@
 const Review = require('../models/Review');
 const Product = require('../models/Product');
+const ProductFactory = require('../services/ProductFactory');
 /**
  * ProductController - Business logic layer cho Products
  * Xử lý HTTP requests và gọi Repository
@@ -200,38 +201,44 @@ class ProductController {
   }
 
   /**
-   * POST /api/products - Tạo sản phẩm mới
+   * POST /api/products - Tạo sản phẩm mới (FACTORY PATTERN)
+   * Client gửi: { type: 'coffee'|'accessory'|'combo', name, price?, ... }
+   * Factory tự generate: SKU, default price, description, stock
    */
   async create(req, res, next) {
     try {
-      const { name, category, sku, ...rest } = req.body;
+      const { type = 'general', ...payload } = req.body;
 
-      // Validation
-      if (!name || !category || !sku) {
-        return res.status(400).json({
-          success: false,
-          message: 'Missing required fields: name, category, and sku are required',
-        });
-      }
+      // ⭐ FACTORY PATTERN: Delegate product creation to Factory
+      const factoryProduct = ProductFactory.createProduct(type, payload);
 
+      // Auto-generate unique numeric ID (max existing + 1)
+      const lastProduct = await Product.findOne().sort({ id: -1 }).select('id').lean();
+      const nextId = (lastProduct?.id || 0) + 1;
+
+      // Merge factory output with required model fields
       const productData = {
-        name,
-        category,
-        sku,
-        imageUrl: rest.imageUrl || '',
-        description: rest.description || '',
-        stock: rest.stock !== undefined ? rest.stock : true,
-        price: Number(rest.price) || 0,
-        quantity: Number(rest.quantity) || 0,
-        status: rest.status || 'Publish',
-        variants: Array.isArray(rest.variants) ? rest.variants : [],
+        ...factoryProduct,
+        id: nextId,
+        name: factoryProduct.name,
+        category: factoryProduct.category,
+        sku: factoryProduct.sku,
+        price: Number(factoryProduct.price) || 0,
+        quantity: Number(payload.quantity) || 0,
+        imageUrl: payload.imageUrl || `https://placehold.co/400x400?text=${encodeURIComponent(factoryProduct.name)}`,
+        stock: factoryProduct.stock !== undefined ? factoryProduct.stock : true,
+        status: payload.status || 'Publish',
+        variants: Array.isArray(payload.variants) ? payload.variants : [],
       };
+
+      console.log(`🏭 [ProductFactory] Created ${type} product: SKU=${productData.sku}, Name=${productData.name}`);
 
       const created = await this.productRepository.create(productData);
 
       return res.status(201).json({
         success: true,
         data: created,
+        factory: { type, generatedSku: productData.sku },
       });
     } catch (error) {
       next(error);

@@ -25,6 +25,8 @@ export const CartProvider = ({ children }) => {
 
   // ⭐ PURE: When user changes, load their cart through CartService
   useEffect(() => {
+    let unsubscribe = null;
+
     const initializeCart = async () => {
       try {
         // Update user in pure service
@@ -38,16 +40,13 @@ export const CartProvider = ({ children }) => {
           `🛒 [CartContext] Loaded cart for user: ${currentUserEmail || "anonymous"} (${userCart.length} items)`
         );
 
-        // Subscribe to CartService changes
-        const unsubscribe = cartService.subscribe((updatedItems) => {
+        // Subscribe to CartService changes (Observer Pattern)
+        unsubscribe = cartService.subscribe((updatedItems) => {
           setItems(updatedItems);
           console.log("✅ [CartObserver] Cart synchronized");
         });
 
         setIsInitialized(true);
-
-        // Cleanup subscription
-        return unsubscribe;
       } catch (error) {
         console.error("❌ [CartContext] Error initializing cart:", error);
         setItems([]);
@@ -55,7 +54,12 @@ export const CartProvider = ({ children }) => {
       }
     };
 
-    return initializeCart().then((cleanup) => cleanup);
+    initializeCart();
+
+    // ⭐ Synchronous cleanup function (React requires this)
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [currentUserEmail]);
 
   // ⭐ PURE: Delegate addToCart to CartService

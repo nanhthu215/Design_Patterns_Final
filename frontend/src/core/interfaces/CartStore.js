@@ -42,4 +42,4 @@ class CartStore {
   }
 }
 
-module.exports = CartStore;
+export default CartStore;

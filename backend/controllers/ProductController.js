@@ -37,8 +37,8 @@ class ProductController {
       };
 
       const pagination = {
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
+        page: Math.max(parseInt(page, 10) || 1, 1),
+        limit: Math.max(parseInt(limit, 10) || 12, 1),
       };
 
       const result = await this.productRepository.findPaginated(

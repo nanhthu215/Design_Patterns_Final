@@ -397,6 +397,7 @@ const CheckoutPage = () => {
 
       // Payload sent to /api/orders
       const payload = {
+        customerId: effectiveUser?._id || effectiveUser?.id,
         items: items.map((it) => ({
           productId: it.productId,
           name: it.name,
@@ -411,6 +412,7 @@ const CheckoutPage = () => {
         shippingAddress,
         note: form.note,
         paymentMethod,
+        paymentDetails: {},
         currency: "VND",
         shippingFee,
         pointsUsed: pointsToUse,

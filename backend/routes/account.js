@@ -41,7 +41,15 @@ router.get('/', authMiddleware, (req, res, next) =>
   accountController.getAccount(req, res, next)
 );
 
+router.get('/me', authMiddleware, (req, res, next) =>
+  accountController.getAccount(req, res, next)
+);
+
 router.put('/', authMiddleware, (req, res, next) =>
+  accountController.updateProfile(req, res, next)
+);
+
+router.put('/profile', authMiddleware, (req, res, next) =>
   accountController.updateProfile(req, res, next)
 );
 

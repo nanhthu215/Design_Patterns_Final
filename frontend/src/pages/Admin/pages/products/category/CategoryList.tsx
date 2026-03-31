@@ -63,19 +63,20 @@ const CategoryList: React.FC<CategoryListProps> = ({ setActivePage, onCategoryCl
       let transformed: any[] = [];
 
       try {
-        const res = await CategoriesApi.list();
+        const res = await CategoriesApi.list({ withStats: true });
         const data = res?.data || res?.items || res || [];
         if (Array.isArray(data) && data.length > 0) {
           transformed = data.map((cat: any, idx: number) => {
-            const originalName = (cat.name || cat.category || '').trim();
+            const isString = typeof cat === 'string';
+            const originalName = (isString ? cat : (cat.name || cat.category || '')).trim();
             return {
-              id: cat.id || cat._id || idx + 1,
+              id: isString ? idx + 1 : (cat.id || cat._id || idx + 1),
               name: originalName,
               identifier: originalName,
-              productCount: cat.productCount || cat.count || 0,
-              status: cat.status || 'Active',
+              productCount: isString ? 0 : (cat.productCount || cat.count || 0),
+              status: isString ? 'Active' : (cat.status || 'Active'),
             };
-          });
+          }).filter(c => c.name !== '');
         }
       } catch (err) {
         // Continue to fallback

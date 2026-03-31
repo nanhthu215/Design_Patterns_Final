@@ -75,6 +75,9 @@ class MongooseRepositoryAdapter extends Repository {
     try {
       return await this.model.findById(id).lean();
     } catch (error) {
+      if (error.name === 'CastError') {
+        return null;
+      }
       throw new Error(`[${this.name}] FindById failed: ${error.message}`);
     }
   }
@@ -108,6 +111,9 @@ class MongooseRepositoryAdapter extends Repository {
 
       return updated;
     } catch (error) {
+      if (error.name === 'CastError') {
+        throw new Error('Record not found');
+      }
       throw new Error(`[${this.name}] Update failed: ${error.message}`);
     }
   }
@@ -120,6 +126,9 @@ class MongooseRepositoryAdapter extends Repository {
       const result = await this.model.findByIdAndDelete(id);
       return !!result;
     } catch (error) {
+      if (error.name === 'CastError') {
+        return false;
+      }
       throw new Error(`[${this.name}] Delete failed: ${error.message}`);
     }
   }

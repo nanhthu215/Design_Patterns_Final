@@ -45,6 +45,10 @@ class PaymentProcessor {
       case 'ewallet':
       case 'wallet':
       case 'e_wallet':
+      case 'vnpay':
+      case 'momo':
+      case 'zalopay':
+      case 'paypal':
         return new EWalletPayment();
       default:
         throw new Error(`Unknown payment method: ${paymentMethod}`);

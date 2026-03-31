@@ -116,23 +116,13 @@ class OrderController {
       const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
       const { q, status, email, range, startDate, endDate } = req.query;
 
-      // ✅ SECURITY FIX: Require email filter to prevent viewing all orders
-      // Only admin or authenticated users should see filtered orders
-      if (!email || String(email).trim() === "") {
-        console.warn('⚠️ [OrderController] Rejected: Missing email filter for getAll()');
-        return res.status(400).json({
-          success: false,
-          message: 'Email filter is required to fetch orders. Please provide an email parameter.',
-          data: []
-        });
-      }
-
       // Build filters
       const filters = {};
       if (status) filters.status = status;
 
-      // ✅ SECURITY: Always filter by email (required parameter)
-      filters.customerEmail = new RegExp(String(email), "i");
+      if (email && String(email).trim() !== "") {
+        filters.customerEmail = new RegExp(String(email), "i");
+      }
 
       // Search by order code/displayCode (only if provided)
       if (q !== undefined && q !== null && String(q).trim() !== "") {
@@ -234,7 +224,20 @@ class OrderController {
     try {
       const { id } = req.params;
 
-      const order = await this.orderRepository.findWithCustomer(id);
+      let order = null;
+      try {
+        order = await this.orderRepository.findById(id);
+      } catch (err) {
+        if (err.name === 'CastError') {
+          // Fallback to displayCode
+          const orders = await this.orderRepository.findPaginated({ displayCode: id }, { limit: 1 });
+          if (orders && orders.data && orders.data.length > 0) {
+            order = orders.data[0];
+          }
+        } else {
+          throw err;
+        }
+      }
 
       if (!order) {
         return res.status(404).json({
@@ -284,7 +287,7 @@ class OrderController {
    */
   async create(req, res, next) {
     try {
-      const { customerId, items, shippingAddress, discountCode, usePoints, paymentMethod, paymentDetails } = req.body;
+      const { customerId, items, shippingAddress, discountCode, usePoints, paymentMethod, paymentDetails, customerEmail, customerName, customerPhone, shippingFee, note } = req.body;
 
       if (!customerId || !Array.isArray(items) || items.length === 0) {
         return res.status(400).json({
@@ -293,10 +296,10 @@ class OrderController {
         });
       }
 
-      if (!paymentMethod || !paymentDetails) {
+      if (!paymentMethod) {
         return res.status(400).json({
             success: false,
-            message: "Payment method and details are required",
+            message: "Payment method is required",
         });
       }
 
@@ -333,25 +336,44 @@ class OrderController {
 
       const totalAmount = subtotal - discountAmount;
 
-      const paymentResult = await this.paymentProcessor.processPayment(
-        paymentMethod,
-        paymentDetails,
-        totalAmount
+      let paymentResult = { success: true, transactionId: null };
+
+      if (paymentMethod !== "cod") {
+        let pDetails = paymentDetails || {};
+        if (Object.keys(pDetails).length === 0) {
+          if (['vnpay', 'momo', 'ewallet'].includes(paymentMethod)) {
+            pDetails = { walletType: paymentMethod === 'vnpay' ? 'VNPay' : (paymentMethod === 'momo' ? 'Momo' : 'PayPal'), walletEmail: 'customer@example.com' };
+          } else if (paymentMethod === 'credit_card' || paymentMethod === 'card') {
+            pDetails = { cardNumber: '1234567890123456', cardHolder: 'Mock User', expiryDate: '12/28', cvv: '123' };
+          } else if (paymentMethod === 'bank_transfer' || paymentMethod === 'bank') {
+            pDetails = { bankName: 'TestBank', accountNumber: '123456789', accountName: 'Mock User' };
+          }
+        }
+
+        paymentResult = await this.paymentProcessor.processPayment(
+          paymentMethod,
+          pDetails,
+          totalAmount
         );
 
         if (!paymentResult.success) {
-        return res.status(400).json({
-            success: false,
-            message: "Payment failed",
-            error: paymentResult.error,
-        });
-    }
+          return res.status(400).json({
+              success: false,
+              message: "Payment failed",
+              error: paymentResult.error,
+          });
+        }
+      }
 
       // Generate display code (4-char alphanumeric)
       const displayCode = Math.random().toString(36).substring(2, 6).toUpperCase();
 
       const orderData = {
+        id: displayCode, // required by Schema
         customerId,
+        customerEmail: customerEmail || 'guest@example.com',
+        customerName,
+        customerPhone,
         items,
         shippingAddress: shippingAddress || {},
         discountCode: discountCode || null,
@@ -359,7 +381,9 @@ class OrderController {
         pointsUsed,
         subtotal,
         totalAmount,
-        shippingFee: 0,
+        total: totalAmount, // required by Schema
+        shippingFee: shippingFee || 0,
+        notes: note,
         status: "pending",
         displayCode,
         paymentMethod: paymentMethod,

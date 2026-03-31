@@ -121,13 +121,28 @@ class CustomerController {
   }
 
   /**
+   * Helper to resolve customer by ID or Email
+   */
+  async _resolveCustomer(idOrEmail) {
+    if (idOrEmail && idOrEmail.includes("@")) {
+      return await this.customerRepository.findByEmail(idOrEmail);
+    }
+    try {
+      return await this.customerRepository.findById(idOrEmail);
+    } catch (error) {
+      if (error.name === "CastError") return null;
+      throw error;
+    }
+  }
+
+  /**
    * GET /api/customers/:id - Get customer by ID
    */
   async getOne(req, res, next) {
     try {
       const { id } = req.params;
 
-      const customer = await this.customerRepository.findById(id);
+      const customer = await this._resolveCustomer(id);
 
       if (!customer) {
         return res.status(404).json({
@@ -152,7 +167,16 @@ class CustomerController {
     try {
       const { id } = req.params;
 
-      const customer = await this.customerRepository.findWithOrders(id);
+      // Resolve actual ID if email is passed
+      const resolvedCustomer = await this._resolveCustomer(id);
+      if (!resolvedCustomer) {
+        return res.status(404).json({
+          success: false,
+          message: "Customer not found",
+        });
+      }
+
+      const customer = await this.customerRepository.findWithOrders(resolvedCustomer._id || resolvedCustomer.id);
 
       if (!customer) {
         return res.status(404).json({
@@ -235,7 +259,15 @@ class CustomerController {
       const { id } = req.params;
       const updateData = req.body;
 
-      const customer = await this.customerRepository.update(id, updateData);
+      const resolved = await this._resolveCustomer(id);
+      if (!resolved) {
+        return res.status(404).json({
+          success: false,
+          message: "Customer not found",
+        });
+      }
+
+      const customer = await this.customerRepository.update(resolved._id || resolved.id, updateData);
 
       if (!customer) {
         return res.status(404).json({
@@ -260,7 +292,15 @@ class CustomerController {
     try {
       const { id } = req.params;
 
-      const customer = await this.customerRepository.delete(id);
+      const resolved = await this._resolveCustomer(id);
+      if (!resolved) {
+        return res.status(404).json({
+          success: false,
+          message: "Customer not found",
+        });
+      }
+
+      const customer = await this.customerRepository.delete(resolved._id || resolved.id);
 
       if (!customer) {
         return res.status(404).json({

@@ -67,8 +67,13 @@ class ProductRepository {
    */
   async findById(id) {
     // Try via adapter (adapter handles ObjectId conversion internally)
-    let product = await this.adapter.findById(id);
-    if (product) return product;
+    let product;
+    try {
+      product = await this.adapter.findById(id);
+      if (product) return product;
+    } catch (e) {
+      // Ignore CastError and try fallback
+    }
 
     // Fallback: Try by numeric id
     const nId = Number(id);
@@ -98,12 +103,15 @@ class ProductRepository {
    * PURE: Validate and update through adapter
    */
   async update(id, updateData) {
+    const product = await this.findById(id);
+    if (!product) return null;
+
     const validated = {
       ...updateData,
       updatedAt: new Date(),
     };
 
-    return await this.adapter.update(id, validated);
+    return await this.adapter.update(product._id, validated);
   }
 
   /**
@@ -111,7 +119,9 @@ class ProductRepository {
    * PURE: Delete through adapter
    */
   async delete(id) {
-    return await this.adapter.delete(id);
+    const product = await this.findById(id);
+    if (!product) return false;
+    return await this.adapter.delete(product._id);
   }
 
   /**

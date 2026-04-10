@@ -63,7 +63,7 @@ export default function CartPage() {
     });
   };
 
-  const handleChangeVariant = (item, newIndex) => {
+  const handleChangeVariant = async (item, newIndex) => {
     if (!Array.isArray(item.variantOptions) || !item.variantOptions[newIndex]) {
       return;
     }
@@ -83,13 +83,10 @@ export default function CartPage() {
     const nextPrice = basePrice + priceDelta;
     const variantName = item.variant?.name || "size";
 
-    // same key formula as in CartContext
-    const newKey = `${item.productId || ""}-${variantName}-${
-      opt.label || "default"
-    }`;
+    const oldKey = item.key;
 
-    // update in context
-    updateItemVariant(item.key, {
+    // update in context — returns the new key
+    const newKey = await updateItemVariant(oldKey, {
       variant: { name: variantName, value: opt.label },
       price: nextPrice,
       basePrice,
@@ -97,13 +94,15 @@ export default function CartPage() {
       variantIndex: newIndex,
     });
 
-    // if item is currently selected, also update to the new key
-    setSelectedKeys((prev) => {
-      if (!prev.includes(item.key)) return prev;
-      const next = prev.filter((k) => k !== item.key);
-      if (!next.includes(newKey)) next.push(newKey);
-      return next;
-    });
+    // if item was selected, update selectedKeys to track the new key
+    if (newKey && newKey !== oldKey) {
+      setSelectedKeys((prev) => {
+        if (!prev.includes(oldKey)) return prev;
+        const next = prev.filter((k) => k !== oldKey);
+        if (!next.includes(newKey)) next.push(newKey);
+        return next;
+      });
+    }
   };
 
   // navigate to product detail page

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import { fetchCustomerById, fetchCustomerOrders, deleteCustomer } from '../../../../api/customers';
 import { OrdersApi } from '../../../../api/orders';
 import BackButton from '../../components/BackButton';
@@ -23,7 +24,11 @@ type Props = {
   onOrderClick?: (orderId: string, orderData?: any) => void;
 };
 
-const CustomerDetail: React.FC<Props> = ({ customerId, onBack, onOrderClick }) => {
+const CustomerDetail: React.FC<Props> = ({ customerId: propCustomerId, onBack, onOrderClick }) => {
+  const { customerId: urlCustomerId } = useParams<{ customerId: string }>();
+  const customerId = propCustomerId || urlCustomerId || null;
+
+
   const [customer, setCustomer] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);

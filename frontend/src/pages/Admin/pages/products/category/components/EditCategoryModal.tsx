@@ -1,4 +1,5 @@
 import React from 'react';
+import VariantsSection, { ProductVariant } from '../../ProductDetail/components/VariantsSection';
 
 type ImportSummary = {
   created: number;
@@ -11,6 +12,7 @@ type EditCategoryModalProps = {
   form: {
     title: string;
     status: string;
+    defaultVariants: ProductVariant[];
   };
   attachment: File | null;
   summary: ImportSummary | null;
@@ -24,6 +26,7 @@ type EditCategoryModalProps = {
   onSubmit: () => void;
   onTitleChange: (value: string) => void;
   onStatusChange: (value: string) => void;
+  onVariantsChange: (variants: ProductVariant[]) => void;
   onFileChange: (file: File | null) => void;
 };
 
@@ -39,6 +42,7 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
   onSubmit,
   onTitleChange,
   onStatusChange,
+  onVariantsChange,
   onFileChange,
 }) => {
   if (!open || !selectedCategory) {
@@ -47,7 +51,7 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-background-dark border border-gray-700 rounded-2xl w-full max-w-lg shadow-xl">
+      <div className="bg-background-dark border border-gray-700 rounded-2xl w-full max-w-2xl shadow-xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-gray-700">
           <h3 className="text-lg font-semibold text-text-primary">Edit Category</h3>
           <button
@@ -58,7 +62,7 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
             ✕
           </button>
         </div>
-        <div className="p-6 space-y-4 text-sm">
+        <div className="p-6 space-y-4 text-sm overflow-y-auto flex-1">
           <div>
             <label className="block text-text-secondary mb-1">Title</label>
             <input
@@ -69,6 +73,7 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
               className="w-full bg-background-light border border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary text-text-primary"
             />
           </div>
+          {/* Unique attribute input removed */}
           <div>
             <label className="block text-text-secondary mb-1">Attachment (tùy chọn)</label>
             <p className="text-xs text-text-secondary mb-2">
@@ -95,6 +100,20 @@ const EditCategoryModal: React.FC<EditCategoryModalProps> = ({
               />
             </label>
           </div>
+
+          <div>
+            <label className="block text-text-secondary mb-1">Cấu hình tính năng biến thể (mặc định)</label>
+            <p className="text-xs text-text-secondary mb-2">
+              Các tuỳ chọn mẫu cập nhật ở đây sẽ được gợi ý cho các sản phẩm Tạo Mới thuộc danh mục này.
+            </p>
+            <div className="bg-background-light border border-gray-600 rounded-lg p-3">
+              <VariantsSection 
+                variants={form.defaultVariants} 
+                onChange={onVariantsChange} 
+              />
+            </div>
+          </div>
+
           <div>
             <label className="block text-text-secondary mb-1">Status</label>
             <select

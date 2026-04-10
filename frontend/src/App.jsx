@@ -20,6 +20,7 @@ import CoffeeSets from './pages/Menu/CoffeeSets';
 import CupsMugs from './pages/Menu/CupsMugs';
 import RoastCoffee from './pages/Menu/RoastCoffee';
 import CoffeeMakersGrinders from './pages/Menu/CoffeeMakersGrinders';
+import CategoryMenuPage from './pages/Menu/CategoryMenuPage';
 import Navbar from './components/NavBar';
 import { CartProvider } from "./contexts/CartContext";
 import GoogleCallbackPage from './pages/Auth/GoogleCallbackPage';
@@ -57,22 +58,10 @@ function AppShell() {
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
 
-        {/* <Route path="/menu" element={<Menu/>} /> */}
-        <Route path="/menu/coffee-sets" element={<CoffeeSets/>} />
-        <Route path="/menu/cups-mugs" element={<CupsMugs/>} />
-        <Route path="/menu/roast-coffee" element={<RoastCoffee/>} />
-        <Route path="/menu/coffee-makers-grinders" element={<CoffeeMakersGrinders/>} />
-
         {/* Contact */}
         <Route path="/contact" element={<ContactPage />} />
-        {/* <Route path="/menu" element={<Menu/>} /> */}
-        <Route path="/menu/coffee-sets" element={<CoffeeSets/>} />
-        <Route path="/menu/cups-mugs" element={<CupsMugs/>} />
-        <Route path="/menu/roast-coffee" element={<RoastCoffee/>} />
-        <Route path="/menu/coffee-makers-grinders" element={<CoffeeMakersGrinders/>} />
 
-        {/* Contact */}
-        <Route path="/contact" element={<ContactPage />} />
+        <Route path="/menu/:categorySlug" element={<CategoryMenuPage/>} />
 
         {/* Orders */}
         <Route path="/orders" element={<OrderHistory />} />

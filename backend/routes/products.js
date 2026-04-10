@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const ProductRepository = require('../repositories/ProductRepository');
+const ProductRepository = require('../patterns/repository/ProductRepository');
 const ProductController = require('../controllers/ProductController');
 
 // Initialize repository and controller
@@ -8,6 +8,7 @@ const productRepository = new ProductRepository();
 const productController = new ProductController(productRepository);
 
 // Routes
+router.get('/defaults', (req, res, next) => productController.getDefaults(req, res, next));
 router.get('/', (req, res, next) => productController.getAll(req, res, next));
 router.get('/:id/reviews', (req, res, next) => productController.getReviews(req, res, next));
 router.get('/:id', (req, res, next) => productController.getOne(req, res, next));

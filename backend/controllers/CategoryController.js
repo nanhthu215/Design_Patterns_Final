@@ -13,8 +13,11 @@ class CategoryController {
     try {
       const { withStats = false } = req.query;
 
-      let categories;
+      // ⭐ DATA INTEGRITY: Tự động đồng bộ các danh mục từ bảng Product sang bảng Category
+      // khi truy cập danh sách (Đặc biệt hữu dụng cho dữ liệu Import)
+      await this.categoryRepository.syncFromProducts();
 
+      let categories;
       if (withStats === "true" || withStats === "1") {
         categories = await this.categoryRepository.getCategoriesWithCounts();
       } else {
@@ -138,21 +141,64 @@ class CategoryController {
   }
 
   /**
-   * PATCH /api/categories/:categoryName - Update category (rename)
+   * POST /api/categories - Tạo danh mục mới kèm thuộc tính riêng
    */
-  async update(req, res, next) {
+  async create(req, res, next) {
     try {
-      const { categoryName } = req.params;
-      const { newName } = req.body;
+      const { name, description, isActive, defaultVariants } = req.body;
 
-      if (!newName) {
+      if (!name) {
         return res.status(400).json({
           success: false,
-          message: "Missing 'newName' in request body",
+          message: "Missing 'name' in request body",
         });
       }
 
-      // Check if old category exists
+      // Kiểm tra trùng tên
+      const exists = await this.categoryRepository.categoryExists(name);
+      if (exists) {
+        return res.status(409).json({
+          success: false,
+          message: `Category "${name}" already exists`,
+        });
+      }
+
+      const category = await this.categoryRepository.createCategory({
+        name: name.trim(),
+        description: description || "",
+        isActive: isActive !== undefined ? isActive : true,
+        defaultVariants: defaultVariants || []
+      });
+
+      return res.status(201).json({
+        success: true,
+        data: category,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * PATCH /api/categories/:categoryName - Cập nhật danh mục
+   */
+  async update(req, res, next) {
+    try {
+      console.log('🚀 [Debug] CategoryController.update called with:', {
+        categoryName: req.params.categoryName,
+        body: req.body
+      });
+      const { categoryName } = req.params;
+      const rawBody = req.body;
+
+      // Chuẩn hóa payload: chấp nhận cả 'name' và 'newName' (backward compatibility)
+      const updateData = { ...rawBody };
+      if (!updateData.name && updateData.newName) {
+        updateData.name = updateData.newName;
+      }
+      delete updateData.newName; // loại bỏ trường dư thừa
+
+      // 1. Kiểm tra danh mục cũ có tồn tại không
       const exists = await this.categoryRepository.categoryExists(categoryName);
       if (!exists) {
         return res.status(404).json({
@@ -161,25 +207,27 @@ class CategoryController {
         });
       }
 
-      // Check if new name already exists
-      const newExists = await this.categoryRepository.categoryExists(newName);
-      if (newExists) {
-        return res.status(409).json({
-          success: false,
-          message: `Category "${newName}" already exists`,
-        });
+      // 2. Nếu thay đổi tên, kiểm tra trùng tên mới
+      if (updateData.name && updateData.name.trim() !== categoryName) {
+        const newExists = await this.categoryRepository.categoryExists(updateData.name.trim());
+        if (newExists) {
+          return res.status(409).json({
+            success: false,
+            message: `Category "${updateData.name.trim()}" already exists`,
+          });
+        }
       }
 
-      // Update category
-      const result = await this.categoryRepository.updateCategory(categoryName, newName);
+      // 3. Thực hiện cập nhật
+      const result = await this.categoryRepository.updateCategory(categoryName, updateData);
 
       return res.json({
         success: true,
-        message: `Category renamed from "${categoryName}" to "${newName}"`,
+        message: `Category "${categoryName}" updated successfully`,
         data: {
-          oldName: categoryName,
-          newName,
-          modifiedCount: result.modifiedCount,
+          originalName: categoryName,
+          updatedData: updateData,
+          modifiedProductCount: result.modifiedCount || 0,
         },
       });
     } catch (error) {

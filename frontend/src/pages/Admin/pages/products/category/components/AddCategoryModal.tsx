@@ -1,4 +1,5 @@
 import React from 'react';
+import VariantsSection, { ProductVariant } from '../../ProductDetail/components/VariantsSection';
 
 type ImportSummary = {
   created: number;
@@ -12,6 +13,7 @@ type AddCategoryModalProps = {
     title: string;
     status: string;
     attachment: File | null;
+    defaultVariants: ProductVariant[];
   };
   importSummary: ImportSummary | null;
   isSaving: boolean;
@@ -19,6 +21,7 @@ type AddCategoryModalProps = {
   onSubmit: () => void;
   onTitleChange: (value: string) => void;
   onStatusChange: (value: string) => void;
+  onVariantsChange: (variants: ProductVariant[]) => void;
   onFileChange: (file: File | null) => void;
 };
 
@@ -31,6 +34,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
   onSubmit,
   onTitleChange,
   onStatusChange,
+  onVariantsChange,
   onFileChange,
 }) => {
   if (!open) {
@@ -39,7 +43,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-background-dark border border-gray-700 rounded-2xl w-full max-w-lg shadow-xl">
+      <div className="bg-background-dark border border-gray-700 rounded-2xl w-full max-w-2xl shadow-xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-5 border-b border-gray-700">
           <h3 className="text-lg font-semibold text-text-primary">Add Category</h3>
           <button 
@@ -74,7 +78,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
             ✕
           </button>
         </div>
-        <div className="p-6 space-y-4 text-sm">
+        <div className="p-6 space-y-4 text-sm overflow-y-auto flex-1">
           <div>
             <label className="block text-text-secondary mb-1">Title</label>
             <input
@@ -85,6 +89,7 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
               className="w-full bg-background-light border border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary text-text-primary"
             />
           </div>
+          {/* Unique attribute input removed */}
           <div>
             <label className="block text-text-secondary mb-1">Attachment</label>
             <p className="text-xs text-text-secondary mb-2">
@@ -114,6 +119,20 @@ const AddCategoryModal: React.FC<AddCategoryModalProps> = ({
               />
             </label>
           </div>
+
+          <div>
+            <label className="block text-text-secondary mb-1">Cấu hình tính năng biến thể (mặc định)</label>
+            <p className="text-xs text-text-secondary mb-2">
+              Các tuỳ chọn này sẽ tự động gợi ý cho sản phẩm thuộc danh mục này thay vì phải cài đặt lại cho từng sản phẩm.
+            </p>
+            <div className="bg-background-light border border-gray-600 rounded-lg p-3">
+              <VariantsSection 
+                variants={form.defaultVariants} 
+                onChange={onVariantsChange} 
+              />
+            </div>
+          </div>
+
           <div>
             <label className="block text-text-secondary mb-1">Select category status</label>
             <select

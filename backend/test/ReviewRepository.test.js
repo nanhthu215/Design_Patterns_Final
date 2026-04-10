@@ -26,7 +26,7 @@ describe('ReviewRepository', () => {
       exec: jest.fn(),
     };
 
-    ReviewRepository = require('../repositories/ReviewRepository');
+    ReviewRepository = require('../patterns/repository/ReviewRepository');
     repository = new ReviewRepository(mockReviewModel);
   });
 

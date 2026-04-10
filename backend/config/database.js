@@ -35,9 +35,7 @@ if (!MONGO_URI) {
 async function connectDB() {
   try {
     const conn = await mongoose.connect(MONGO_URI, {
-      // 2 option này đã deprecated nhưng không sao nếu còn, có thể bỏ
-      // useNewUrlParser: true,
-      // useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 5000, // Timeout sau 5 giây để báo lỗi
     });
 
     console.log('✅ MongoDB Connected Successfully!');

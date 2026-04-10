@@ -6,8 +6,10 @@ type Category = {
   id: string | number;
   name: string;
   identifier?: string;
+  uniqueAttributeName?: string;
   productCount: number;
   status: string;
+  defaultVariants?: any[];
 };
 
 type CategoryTableProps = {

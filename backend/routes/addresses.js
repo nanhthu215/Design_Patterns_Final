@@ -1,5 +1,5 @@
 const express = require('express');
-const AddressRepository = require('../repositories/AddressRepository');
+const AddressRepository = require('../patterns/repository/AddressRepository');
 const AddressController = require('../controllers/AddressController');
 
 const router = express.Router();

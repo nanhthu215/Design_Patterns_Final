@@ -74,7 +74,7 @@ function prettyCategory(cat) {
 }
 
 function getSizeVar(p) {
-  return p?.variants?.find((v) => v.name === "size");
+  return p?.variants?.length ? p.variants[0] : null;
 }
 
 function getPriceWithSize(p, optIdx = 0) {
@@ -299,7 +299,7 @@ const ProductCarousel = () => {
                     "/images/placeholder.png"
                 );
 
-                const sizeVar = p.variants?.find((v) => v.name === "size");
+                const sizeVar = p.variants?.length ? p.variants[0] : null;
                 const optIdx = selectedSize[id] ?? 0;
                 const sizeOpt = sizeVar?.options?.[optIdx];
                 const priceNumber = getPriceWithSize(p, optIdx);
@@ -374,7 +374,7 @@ const ProductCarousel = () => {
                           if (isOutOfStock) return;
 
                           const variant = sizeVar
-                            ? { name: "size", value: sizeOpt?.label }
+                            ? { name: sizeVar.name, value: sizeOpt?.label }
                             : null;
 
                           const basePrice = Number(p.price || 0);
@@ -525,7 +525,7 @@ const ProductCarousel = () => {
                           if (isOutOfStock) return;
 
                           const variant = sizeVar
-                            ? { name: "size", value: sizeOpt?.label }
+                            ? { name: sizeVar.name, value: sizeOpt?.label }
                             : null;
                           addToCart({
                             productId: id,

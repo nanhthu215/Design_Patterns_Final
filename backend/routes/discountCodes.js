@@ -1,7 +1,7 @@
 // backend/routes/discountCodes.js
 const express = require('express');
 const DiscountCode = require('../models/DiscountCode');
-const DiscountCodeRepository = require('../repositories/DiscountCodeRepository');
+const DiscountCodeRepository = require('../patterns/repository/DiscountCodeRepository');
 const DiscountCodeController = require('../controllers/DiscountCodeController');
 
 const router = express.Router();

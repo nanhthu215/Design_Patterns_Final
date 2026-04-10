@@ -1,7 +1,7 @@
 // backend/routes/account.js
 const express = require('express');
 const Customer = require('../models/Customer');
-const AccountRepository = require('../repositories/AccountRepository');
+const AccountRepository = require('../patterns/repository/AccountRepository');
 const AccountController = require('../controllers/AccountController');
 
 const router = express.Router();

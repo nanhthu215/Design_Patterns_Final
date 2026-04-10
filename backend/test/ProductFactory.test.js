@@ -1,4 +1,4 @@
-const ProductFactory = require('../services/ProductFactory');
+const ProductFactory = require('../patterns/factory/ProductFactory');
 
 describe('ProductFactory', () => {
   describe('createProduct - Coffee Type', () => {

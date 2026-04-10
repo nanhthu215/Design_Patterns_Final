@@ -15,6 +15,15 @@ import {
   normalizeProductPayload,
   fetchAllProducts,
 } from './utils';
+import { ProductVariant } from '../ProductDetail/components/VariantsSection';
+
+// Danh sách danh mục chuẩn (khớp với OrganizeSection.tsx)
+const STANDARD_CATEGORIES = [
+  'Roasted coffee',
+  'Coffee sets',
+  'Cups & Mugs',
+  'Coffee makers and grinders',
+];
 
 type CategoryListProps = {
   setActivePage: (page: string) => void;
@@ -31,6 +40,7 @@ const CategoryList: React.FC<CategoryListProps> = ({ setActivePage, onCategoryCl
     title: '',
     attachment: null as File | null,
     status: 'Active',
+    defaultVariants: [] as ProductVariant[],
   });
   const [importSummary, setImportSummary] = useState<{ created: number; updated: number; failed: number } | null>(null);
 
@@ -40,6 +50,7 @@ const CategoryList: React.FC<CategoryListProps> = ({ setActivePage, onCategoryCl
   const [editForm, setEditForm] = useState({
     title: '',
     status: 'Active',
+    defaultVariants: [] as ProductVariant[],
   });
   const [editAttachment, setEditAttachment] = useState<File | null>(null);
   const [editSummary, setEditSummary] = useState<{ created: number; updated: number; failed: number } | null>(null);
@@ -60,47 +71,73 @@ const CategoryList: React.FC<CategoryListProps> = ({ setActivePage, onCategoryCl
   const loadCategories = useCallback(async () => {
     try {
       setLoading(true);
-      let transformed: any[] = [];
 
-      try {
-        const res = await CategoriesApi.list({ withStats: true });
-        const data = res?.data || res?.items || res || [];
-        if (Array.isArray(data) && data.length > 0) {
-          transformed = data.map((cat: any, idx: number) => {
-            const isString = typeof cat === 'string';
-            const originalName = (isString ? cat : (cat.name || cat.category || '')).trim();
-            return {
-              id: isString ? idx + 1 : (cat.id || cat._id || idx + 1),
-              name: originalName,
-              identifier: originalName,
-              productCount: isString ? 0 : (cat.productCount || cat.count || 0),
-              status: isString ? 'Active' : (cat.status || 'Active'),
-            };
-          }).filter(c => c.name !== '');
-        }
-      } catch (err) {
-        // Continue to fallback
+      // 1. Lấy dữ liệu danh mục thực từ Backend (bao gồm cấu hình defaultVariants)
+      const catRes = await CategoriesApi.list({ withStats: 'true' });
+      const officialCategories = catRes?.data?.data || catRes?.data || [];
+      const officialMap = new Map();
+      officialCategories.forEach((cat: any) => {
+        officialMap.set((cat.name || '').trim().toLowerCase(), cat);
+      });
+
+      // 2. Lấy dữ liệu từ Products API để đếm count chính xác nhất (frontend grouping)
+      const productRes = await ProductsApi.list({ limit: 1000, page: 1 } as any);
+      const productItems = productRes?.data?.data || productRes?.data || productRes?.items || [];
+
+      // Group sản phẩm theo category và đếm
+      const countMap: Record<string, number> = {};
+      if (Array.isArray(productItems)) {
+        productItems.forEach((product: any) => {
+          const cat = (product.category || '').trim();
+          if (cat) countMap[cat] = (countMap[cat] || 0) + 1;
+        });
       }
 
-      if (!transformed.length) {
-        const productRes = await ProductsApi.list({ limit: 1000, page: 1 } as any);
-        const productItems = productRes?.data || productRes?.items || [];
-        if (Array.isArray(productItems) && productItems.length) {
-          const grouped = productItems.reduce((acc: Record<string, number>, product: any) => {
-            const categoryName = product.category || 'Uncategorized';
-            acc[categoryName] = (acc[categoryName] || 0) + 1;
-            return acc;
-          }, {});
-          transformed = Object.entries(grouped).map(([name, count], idx) => ({
-            id: `fallback-${idx}`,
+      // Build danh sách cơ bản từ Official Categories
+      const transformed: any[] = officialCategories.map((cat: any) => {
+        const lowerName = (cat.name || '').trim().toLowerCase();
+        return {
+          id: cat._id || cat.id || `virtual-${lowerName}`,
+          name: cat.name,
+          identifier: cat.name,
+          productCount: countMap[lowerName] || cat.count || 0,
+          status: cat.status || (cat.isActive === false ? 'Inactive' : 'Active'),
+          defaultVariants: cat.defaultVariants || [],
+        };
+      });
+
+      // Merge thêm các category ẩn (nếu chỉ tồn tại trong Products API nhưng backend sync bị miss)
+      Object.entries(countMap).forEach(([name, count], idx) => {
+        const lowerName = name.toLowerCase();
+        if (!officialMap.has(lowerName)) {
+          transformed.push({
+            id: `prod-${idx}`,
             name,
             identifier: name,
             productCount: count,
             status: 'Active',
-          }));
+            defaultVariants: [],
+          });
+          officialMap.set(lowerName, true);
         }
-      }
+      });
 
+      const existingNames = new Set(transformed.map((c: any) => c.name.toLowerCase().trim()));
+      STANDARD_CATEGORIES.forEach((name, idx) => {
+        if (!existingNames.has(name.toLowerCase().trim())) {
+          transformed.push({
+            id: `std-${idx}`,
+            name,
+            identifier: name,
+            productCount: 0,
+            status: 'Active',
+            defaultVariants: [],
+          });
+        }
+      });
+
+      // Sắp xếp theo tên
+      transformed.sort((a, b) => a.name.localeCompare(b.name));
       setCategories(transformed);
     } catch (error) {
       setCategories([]);
@@ -158,6 +195,12 @@ const CategoryList: React.FC<CategoryListProps> = ({ setActivePage, onCategoryCl
     setIsSaving(true);
     setImportSummary(null);
     try {
+      await CategoriesApi.create({
+        name: categoryForm.title.trim(),
+        isActive: categoryForm.status === 'Active',
+        defaultVariants: categoryForm.defaultVariants,
+      }).catch(err => console.log('Category might already exist or error, continuing...'));
+
       const parsed = await parseProductsFile(categoryForm.attachment);
       const existingProducts = await fetchAllProducts();
       const skuMap = new Map<string, any>();
@@ -246,6 +289,7 @@ const CategoryList: React.FC<CategoryListProps> = ({ setActivePage, onCategoryCl
           title: '',
           attachment: null,
           status: 'Active',
+          defaultVariants: [],
         });
         setIsAddModalOpen(false);
       }
@@ -270,8 +314,9 @@ const CategoryList: React.FC<CategoryListProps> = ({ setActivePage, onCategoryCl
       const desiredStatus = editForm.status === 'Active' ? 'Publish' : 'Inactive';
       const statusChanged = editForm.status !== originalStatus;
       const nameChanged = newCategoryName !== originalCategoryName;
+      const variantsChanged = true; // We always update defaultVariants during edit for simplicity
 
-      if (!editAttachment && !statusChanged && !nameChanged) {
+      if (!editAttachment && !statusChanged && !nameChanged && !variantsChanged) {
         alert('Không có thay đổi nào để cập nhật');
         setIsUpdating(false);
         return;
@@ -287,6 +332,17 @@ const CategoryList: React.FC<CategoryListProps> = ({ setActivePage, onCategoryCl
       };
 
       if (nameChanged || statusChanged) {
+        // Cập nhật metadata của category trước
+        const categoryPayload: any = {};
+        if (nameChanged) {
+          categoryPayload.name = newCategoryName;
+          categoryPayload.newName = newCategoryName; // tương thích backward với server cũ
+        }
+        if (statusChanged) categoryPayload.isActive = editForm.status === 'Active';
+        categoryPayload.defaultVariants = editForm.defaultVariants;
+
+        await CategoriesApi.update(originalCategoryName, categoryPayload);
+
         const allProducts = await ensureProducts();
         const targets = allProducts.filter((product: any) => {
           const categoryValue = (product.category || 'Uncategorized').trim();
@@ -445,6 +501,7 @@ const CategoryList: React.FC<CategoryListProps> = ({ setActivePage, onCategoryCl
             title: '',
             attachment: null,
             status: 'Active',
+            defaultVariants: [],
           });
           setImportSummary(null);
           setIsAddModalOpen(true);
@@ -460,16 +517,27 @@ const CategoryList: React.FC<CategoryListProps> = ({ setActivePage, onCategoryCl
         currentPage={currentPage}
         totalPages={totalPages}
         onCategoryClick={handleCategoryClick}
-        onEdit={(category) => {
+        onEdit={async (category) => {
           setSelectedCategory({
             ...category,
             identifier: category.identifier || category.name,
           });
           setEditAttachment(null);
           setEditSummary(null);
+
+          // Nếu category chưa có defaultVariants trong DB, fallback lấy từ Factory
+          let variants = category.defaultVariants || [];
+          if (variants.length === 0) {
+            try {
+              const res = await ProductsApi.getDefaults(category.name);
+              variants = res?.data?.data?.variants || res?.data?.variants || [];
+            } catch (_) { /* Factory không có → để trống */ }
+          }
+
           setEditForm({
             title: category.name,
             status: category.status || 'Active',
+            defaultVariants: variants,
           });
           setIsEditModalOpen(true);
         }}
@@ -497,6 +565,12 @@ const CategoryList: React.FC<CategoryListProps> = ({ setActivePage, onCategoryCl
           setCategoryForm((prev) => ({
             ...prev,
             status: value,
+          }))
+        }
+        onVariantsChange={(variants: ProductVariant[]) =>
+          setCategoryForm((prev) => ({
+            ...prev,
+            defaultVariants: variants,
           }))
         }
         onFileChange={(file) =>
@@ -536,6 +610,12 @@ const CategoryList: React.FC<CategoryListProps> = ({ setActivePage, onCategoryCl
           setEditForm((prev) => ({
             ...prev,
             status: value,
+          }))
+        }
+        onVariantsChange={(variants: ProductVariant[]) =>
+          setEditForm((prev) => ({
+            ...prev,
+            defaultVariants: variants,
           }))
         }
         onFileChange={(file) => setEditAttachment(file)}

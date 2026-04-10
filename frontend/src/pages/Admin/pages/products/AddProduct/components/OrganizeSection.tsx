@@ -3,10 +3,11 @@ import { AddProductFormData } from './ProductInfoSection';
 
 type OrganizeSectionProps = {
   formData: AddProductFormData;
+  categories: any[];
   onChange: (field: keyof AddProductFormData, value: any) => void;
 };
 
-const OrganizeSection: React.FC<OrganizeSectionProps> = ({ formData, onChange }) => (
+const OrganizeSection: React.FC<OrganizeSectionProps> = ({ formData, categories, onChange }) => (
   <div className="bg-background-light p-6 rounded-lg">
     <h3 className="text-lg font-semibold mb-4 text-text-primary">Organize</h3>
     <div className="space-y-4">
@@ -23,10 +24,11 @@ const OrganizeSection: React.FC<OrganizeSectionProps> = ({ formData, onChange })
             required
           >
             <option value="">Select Category</option>
-            <option value="Roasted coffee">Roasted coffee</option>
-            <option value="Coffee sets">Coffee sets</option>
-            <option value="Cups & Mugs">Cups & Mugs</option>
-            <option value="Coffee makers and grinders">Coffee makers and grinders</option>
+            {categories.map((cat) => (
+              <option key={cat.id || cat._id} value={cat.name}>
+                {cat.name}
+              </option>
+            ))}
           </select>
           <svg
             className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none"

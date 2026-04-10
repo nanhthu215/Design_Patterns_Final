@@ -26,7 +26,7 @@ function formatPrice(n) {
 }
 
 function getSizeVar(p) {
-  return p?.variants?.find((v) => v.name === "size");
+  return p?.variants?.length ? p.variants[0] : null;
 }
 
 function getPriceWithSize(p, optIdx = 0) {
@@ -156,7 +156,7 @@ const OrderModal = ({
   const buildCartItem = () => {
     const id = String(selectedProduct._id || selectedProduct.id);
     const variant = sizeVar
-      ? { name: "size", value: currentLabel }
+      ? { name: sizeVar.name, value: currentLabel }
       : null;
 
     const basePrice = Number(selectedProduct.price || 0);

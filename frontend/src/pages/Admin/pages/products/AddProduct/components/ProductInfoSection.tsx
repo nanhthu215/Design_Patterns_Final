@@ -12,6 +12,7 @@ export type AddProductFormData = {
   quantity: string;
   status: ProductStatus;
   stock: boolean;
+  variants: import('../../ProductDetail/components/VariantsSection').ProductVariant[];
 };
 
 type ProductInfoSectionProps = {
@@ -20,7 +21,11 @@ type ProductInfoSectionProps = {
   onGenerateSKU: () => void;
 };
 
-const ProductInfoSection: React.FC<ProductInfoSectionProps> = ({ formData, onChange, onGenerateSKU }) => (
+const ProductInfoSection: React.FC<ProductInfoSectionProps> = ({ 
+  formData, 
+  onChange, 
+  onGenerateSKU 
+}) => (
   <div className="bg-background-light p-6 rounded-lg">
     <h3 className="text-lg font-semibold mb-4 text-text-primary">Product Information</h3>
     <div className="space-y-4">
@@ -77,9 +82,11 @@ const ProductInfoSection: React.FC<ProductInfoSectionProps> = ({ formData, onCha
           placeholder="Product Description"
           value={formData.description}
           onChange={(e) => onChange('description', e.target.value)}
-          className="w-full bg-background-dark border border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary text-text-primary"
+          className="w-full bg-background-dark border border-gray-600 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary text-text-primary min-h-[150px] resize-none"
         />
       </div>
+
+      {/* Unique attributes removed */}
     </div>
   </div>
 );

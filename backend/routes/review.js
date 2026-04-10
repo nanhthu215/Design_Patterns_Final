@@ -6,9 +6,9 @@
 const express = require('express');
 const router = express.Router();
 const ReviewController = require('../controllers/ReviewController');
-const ReviewRepository = require('../repositories/ReviewRepository');
+const ReviewRepository = require('../patterns/repository/ReviewRepository');
 const Review = require('../models/Review');
-const ReviewObserver = require('../core/services/ReviewObserver');
+const ReviewObserver = require('../patterns/observer/ReviewObserver');
 
 const reviewRepository = new ReviewRepository(Review);
 const reviewObserver = ReviewObserver.getInstance();

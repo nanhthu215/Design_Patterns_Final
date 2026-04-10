@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import BackButton from '../../../components/BackButton';
 import { ProductsApi } from '../../../../../api/products';
 import UploadApi from '../../../../../api/upload';
 import { formatVND } from '../../../../../utils/currency';
 import ImageUploadSection from '../components/ImageUploadSection';
 import { formatCurrencyInput } from '../AddProduct/utils';
+import VariantsSection, { ProductVariant } from './components/VariantsSection';
 
 type ProductPrefill = Partial<
   Omit<ProductFormState, 'price' | 'quantity'> & {
@@ -31,18 +33,20 @@ type ProductFormState = {
   status: 'Publish' | 'Inactive' | 'Draft';
   stock: boolean;
   imageUrl: string;
+  variants: ProductVariant[];
 };
 
 const initialState: ProductFormState = {
   name: '',
   sku: '',
-  description: '',
+  description: 'Sản phẩm cao cấp được tuyển chọn kỹ lưỡng, đảm bảo chất lượng và hương vị đặc trưng. Phù hợp cho những tín đồ sành điệu, mang lại trải nghiệm tuyệt vời và đáng nhớ.',
   category: '',
   price: '',
   quantity: '',
   status: 'Publish',
   stock: true,
   imageUrl: '',
+  variants: [],
 };
 
 const toInputString = (value: unknown) =>
@@ -58,9 +62,14 @@ const normalizeProductData = (product?: ProductPrefill): ProductFormState => ({
   status: (product?.status as ProductFormState['status']) || 'Publish',
   stock: product?.stock ?? true,
   imageUrl: (product?.imageUrl as string) || (product as any)?.image || '',
+  variants: (product as any)?.variants || [],
 });
 
-const ProductDetail: React.FC<ProductDetailProps> = ({ productId, onBack, initialProduct }) => {
+const ProductDetail: React.FC<ProductDetailProps> = ({ productId: propProductId, onBack, initialProduct }) => {
+  const { productId: urlProductId } = useParams<{ productId: string }>();
+  const productId = propProductId || urlProductId || null;
+
+
   const [productData, setProductData] = useState<ProductFormState>(() =>
     normalizeProductData(initialProduct),
   );
@@ -78,6 +87,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ productId, onBack, initia
   const [priceRaw, setPriceRaw] = useState("");
   const [priceDisplay, setPriceDisplay] = useState("");
   const isUserTypingRef = useRef(false); // Track if user is actively typing
+  const [categoriesList, setCategoriesList] = useState<any[]>([]);
 
   useEffect(() => {
     return () => {
@@ -86,6 +96,27 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ productId, onBack, initia
       }
     };
   }, [imagePreview]);
+
+  // Load all categories for metadata
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const { CategoriesApi } = await import('../../../../../api/categories');
+        const res = await CategoriesApi.list({ withStats: 'true' });
+        if (res?.data) {
+          const list = res.data.data || (Array.isArray(res.data) ? res.data : []);
+          setCategoriesList(list);
+        }
+      } catch (err) {
+        console.error('Failed to load categories metadata', err);
+      }
+    };
+    loadCategories();
+  }, []);
+
+  useEffect(() => {
+    // We still load categories for selection dropdown, but no longer need uniqueAttribute logic
+  }, [productData.category, categoriesList]);
 
   useEffect(() => {
     if (initialProduct) {
@@ -171,11 +202,24 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ productId, onBack, initia
     };
   }, [productId, initialProduct]);
 
-  const handleFieldChange = (field: keyof ProductFormState, value: string | boolean) => {
+  const handleFieldChange = (field: keyof ProductFormState, value: any) => {
     setProductData((prev) => ({
       ...prev,
       [field]: value,
     }));
+
+    if (field === 'category' && value) {
+      ProductsApi.getDefaults(value).then((res: any) => {
+        if (res?.success && res.data?.variants && res.data.variants.length > 0) {
+          setProductData((prev) => {
+            return {
+              ...prev,
+              variants: res.data.variants
+            };
+          });
+        }
+      }).catch((err: any) => console.error("Failed to fetch category defaults", err));
+    }
   };
 
   const formatPriceDisplay = useCallback(
@@ -330,6 +374,7 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ productId, onBack, initia
         status: productData.status,
         stock: productData.stock,
         imageUrl: finalImageUrl,
+        variants: productData.variants,
       };
 
       const res = await ProductsApi.update(productId, payload as any);
@@ -481,6 +526,10 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ productId, onBack, initia
             required={false}
           />
 
+          <VariantsSection 
+            variants={productData.variants} 
+            onChange={(newVariants) => handleFieldChange('variants', newVariants)} 
+          />
         </div>
 
         <div className="space-y-6">
@@ -560,6 +609,8 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ productId, onBack, initia
                   <option value="Draft">Draft</option>
                 </select>
               </div>
+
+              {/* Unique attributes removed */}
             </div>
           </div>
         </div>

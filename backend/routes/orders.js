@@ -3,7 +3,7 @@ const express = require('express');
 const Order = require('../models/Order');
 const Customer = require('../models/Customer');
 const DiscountCode = require('../models/DiscountCode');
-const OrderRepository = require('../repositories/OrderRepository');
+const OrderRepository = require('../patterns/repository/OrderRepository');
 const OrderController = require('../controllers/OrderController');
 const mailer = require('../config/mailer');
 

@@ -7,6 +7,8 @@ import { updateProfile } from "../../services/account";
 import { useNotifications } from "../../contexts/NotificationContext";
 import "./checkout-page.css";
 import { api } from "../../lib/api";
+import momoLogo from "./momo_logo.jpg";
+import vnpayLogo from "./vnpay_logo.png";
 
 
 const API_BASE_URL =
@@ -129,6 +131,8 @@ const CheckoutPage = () => {
   const [error, setError] = useState("");
   const [accountCreatedInfo, setAccountCreatedInfo] = useState(null);
   const [orderCreated, setOrderCreated] = useState(null);
+  const [isSimulatingPayment, setIsSimulatingPayment] = useState(false);
+  const [pendingOrderPayload, setPendingOrderPayload] = useState(null);
 
   // trạng thái đã đặt hàng xong
   const isSuccess = !!orderCreated;
@@ -189,6 +193,9 @@ const CheckoutPage = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === "paymentMethod") {
+      console.log(`🎯 [Strategy Pattern] Changing payment strategy to: ${value.toUpperCase()}`);
+    }
     setForm((prev) => ({ ...prev, [name]: value }));
   };
   
@@ -367,16 +374,11 @@ const CheckoutPage = () => {
             name: nameForRegister,
             email: form.email,
             password: autoPassword,
-            // 👇 flag này để backend biết là auto-register từ checkout và cần gửi mail
             sendPasswordEmail: true,
           });
 
           effectiveUser = created;
-
-          // Không cần lưu password nữa, chỉ cần email để show message
-          setAccountCreatedInfo({
-            email: form.email,
-          });
+          setAccountCreatedInfo({ email: form.email });
         } catch (regErr) {
           console.error("Auto register error:", regErr);
           const msg =
@@ -385,9 +387,7 @@ const CheckoutPage = () => {
             "Unable to create account with this email.";
 
           if (msg.toLowerCase().includes("exist")) {
-            setError(
-              "This email already has an account. Please log in before checking out."
-            );
+            setError("This email already has an account. Please log in before checking out.");
           } else {
             setError(msg);
           }
@@ -396,185 +396,146 @@ const CheckoutPage = () => {
       }
 
       // Payload sent to /api/orders
-      const payload = {
-        customerId: effectiveUser?._id || effectiveUser?.id,
-        items: items.map((it) => ({
-          productId: it.productId,
-          name: it.name,
-          quantity: it.qty,
-          price: it.price,
-          variant: it.variant,
-          image: it.image,
-        })),
-        customerName: form.fullName,
-        customerPhone: form.phone,
-        customerEmail: effectiveUser?.email || form.email,
-        shippingAddress,
-        note: form.note,
-        paymentMethod,
-        paymentDetails: {},
-        currency: "VND",
-        shippingFee,
-        pointsUsed: pointsToUse,
-        discount: voucherDiscount,
-        discountCode: voucherCode.trim() || undefined,
-      };
+      // Payload sent to /api/orders
+    const payload = {
+      customerId: effectiveUser?._id || effectiveUser?.id,
+      items: items.map((it) => ({
+        productId: it.productId || it._id || it.id,
+        name: it.name,
+        qty: it.qty || it.quantity || 1,
+        quantity: it.qty || it.quantity || 1,
+        price: it.price,
+        variant: it.variant,
+        image: it.image,
+      })),
+      customerName: form.fullName,
+      customerPhone: form.phone,
+      customerEmail: effectiveUser?.email || form.email,
+      shippingAddress,
+      note: form.note,
+      paymentMethod: form.paymentMethod, // ✅ Luôn lấy từ form để đồng bộ
+      // ĐỒNG BỘ: Sử dụng tên trường khớp chính xác với Backend
+      paymentDetails: form.paymentMethod !== "cod" ? { 
+        cardholderName: form.fullName || "Guest User",
+        accountHolderName: form.fullName || "Guest User",
+        cardNumber: "4111111111111111", 
+        bankCode: "TEST-BANK",
+        accountNumber: "123456789",
+        expiryDate: "12/28",
+        cvv: "123",
+        status: "simulated_success"
+      } : {},
+      currency: "VND",
+      shippingFee,
+      subtotal: subtotal,
+      total: total,
+      pointsUsed: pointsToUse,
+      discount: voucherDiscount,
+      discountCode: voucherCode.trim() || undefined,
+    };
 
+      // ✅ NẾU LÀ THANH TOÁN ONLINE -> HIỆN MODAL MÔ PHỎNG TRƯỚC
+      if (paymentMethod !== "cod") {
+        setPendingOrderPayload(payload);
+        setIsSimulatingPayment(true);
+        setSubmitting(false); // 👈 Quan trọng: Nhả nút để người dùng bấm được trong Modal
+        return;
+      }
+
+      await executePlaceOrder(payload, false, shippingAddress);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "An error occurred while creating the order.");
+    } finally {
+      if (form.paymentMethod === "cod") setSubmitting(false);
+    }
+  };
+
+  /**
+   * Thực hiện gọi API tạo đơn hàng
+   */
+  const executePlaceOrder = async (payload, isPaid = false, finalShippingAddress = null) => {
+    try {
+      setSubmitting(true);
       const res = await fetch(`${API_BASE_URL}/api/orders`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        const text = await res.text();
-        console.error("Checkout error response:", text);
-        throw new Error("Unable to create order. Please try again.");
-      }
-
-      const contentType = res.headers.get("content-type") || "";
-      if (!contentType.includes("application/json")) {
-        const text = await res.text();
-        console.error("Checkout non-JSON response:", text);
-        throw new Error("Server returned an invalid response.");
+        const errorData = await res.json();
+        console.error("❌ Order API Error:", errorData);
+        throw new Error(errorData.message || errorData.error || "Unable to create order. Please try again.");
       }
 
       const data = await res.json();
+      console.log("✅ Order created successfully:", data);
       const order = data.data || data.order || data;
 
-      // Nếu là thanh toán online (không phải COD) thì giả lập thanh toán thành công:
-      // gọi PATCH để set paymentStatus = 'paid'
-      try {
-        if (paymentMethod !== "cod") {
-          const orderId = order.id || order._id; // backend xử lý cả 2 kiểu
-
-          await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
+      // Nếu đã trả tiền qua modal simulation -> update status
+      if (isPaid) {
+        const orderId = order.id || order._id;
+        try {
+          const patchRes = await fetch(`${API_BASE_URL}/api/orders/${orderId}`, {
             method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify({
-              paymentStatus: "paid",
-            }),
+            body: JSON.stringify({ paymentStatus: "paid" }),
           });
+
+          if (!patchRes.ok) {
+            const patchError = await patchRes.json();
+            console.error("❌ Order Status Update (PATCH) Error:", patchError);
+          } else {
+            console.log("✅ Order marked as paid successfully");
+          }
+        } catch (e) {
+          console.error("Mark as paid failed:", e);
         }
-      } catch (patchErr) {
-        console.error("Failed to mark order as paid:", patchErr);
-        // demo nên có thể bỏ qua, không chặn flow đặt hàng
       }
 
-      // 🔄 REFRESH USER ĐỂ LẤY LẠI LOYALTY MỚI TỪ BACKEND
-      try {
-        const meRes = await api.get("/api/auth/me");
-        const raw = meRes?.data || meRes;
-        const freshUser = raw.data || raw.user || raw;
-        updateUser?.(freshUser);
-      } catch (refreshErr) {
-        console.error("Failed to refresh user after order:", refreshErr);
-      }
-
-      // 🔄 REFRESH USER ĐỂ LẤY LẠI LOYALTY MỚI TỪ BACKEND
-      try {
-        const meRes = await fetch(`${API_BASE_URL}/api/account/me`, {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (meRes.ok) {
-          const meJson = await meRes.json();
-          const freshUser = meJson.data || meJson.user || meJson;
-
-          // Đẩy user mới vào AuthContext
-          updateUser?.(freshUser);
-        } else {
-          console.warn("Refresh user failed with status", meRes.status);
-        }
-      } catch (refreshErr) {
-        console.error("Failed to refresh user after order:", refreshErr);
-      }
-
-      // 💾 Nếu đang dùng New address và user tick "Save as default"
-      try {
-        if (addressMode === "new" && saveAddress) {
-          // Lấy list địa chỉ hiện tại (nếu có)
+      // 💾 Lưu địa chỉ mới nếu có tick chọn
+      if (addressMode === "new" && saveAddress && finalShippingAddress) {
+        try {
           let list = Array.isArray(user?.addresses) ? [...user.addresses] : [];
-
-          // Chỉ cho phép 1 địa chỉ mặc định
-          list = list.map((addr) => ({
-            ...addr,
-            isDefault: false,
-          }));
-
-          // Đảm bảo có addressLine1
-          const addressLine1 =
-            shippingAddress.addressLine1 ||
-            shippingAddress.addressLine ||
-            form.addressLine ||
-            "";
-
-          const newAddress = {
+          list = list.map(a => ({ ...a, isDefault: false }));
+          list.push({
             label: "Shipping address",
             type: "shipping",
-            fullName: shippingAddress.fullName || form.fullName,
-            phone: shippingAddress.phone || form.phone,
-            addressLine1,
-            ward: shippingAddress.ward || form.ward,
-            district: shippingAddress.district || form.district,
-            city: shippingAddress.city || form.city,
-            isDefault: true, // 👈 lưu làm mặc định
-          };
-
-          list.push(newAddress);
-
+            ...finalShippingAddress,
+            isDefault: true,
+          });
           const result = await updateProfile({ addresses: list });
-
-          // sync lại vào AuthContext & localStorage
-          if (result && result.data) {
-            updateUser?.(result.data);
-          } else if (result) {
-            updateUser?.(result);
-          }
+          if (result) updateUser?.(result.data || result);
+        } catch (e) {
+          console.error("Save address failed:", e);
         }
-      } catch (saveErr) {
-        console.error(
-          "Failed to save default address from checkout:",
-          saveErr
-        );
-        // không chặn đơn nếu lưu địa chỉ bị lỗi
       }
 
-      clearCart();
+      // Refresh user data (points, etc)
+      try {
+        const meRes = await api.get("/api/auth/me");
+        updateUser?.(meRes?.data?.data || meRes?.data || meRes);
+      } catch (e) {}
 
+      clearCart();
       setOrderCreated(order);
       window.scrollTo({ top: 0, behavior: "smooth" });
 
-      // 🔔 push in-app notification lên bell
-      try {
-        addNotification({
-          type: "order",
-          title: "Order placed successfully",
-          message: `Order ${order.displayCode || order._id || ""
-            } – total ${formatVND(total)}`,
-          link: order._id ? `/orders/${order._id}` : "/orders",
-        });
-      } catch (e) {
-        // nếu chưa bọc NotificationProvider thì cũng không crash
-        console.error("addNotification error:", e);
-      }
-
-
+      addNotification({
+        type: "order",
+        title: "Order placed successfully",
+        message: `Order ${order.displayCode || order._id || ""} confirmed`,
+        link: order._id ? `/orders/${order._id}` : "/orders",
+      });
     } catch (err) {
-      console.error(err);
-      setError(err.message || "An error occurred while creating the order.");
+      setError(err.message);
     } finally {
       setSubmitting(false);
+      setIsSimulatingPayment(false);
+      setPendingOrderPayload(null);
     }
   };
 
@@ -1019,7 +980,7 @@ const CheckoutPage = () => {
                   ) : (
                     <>
                       <div className="checkout-payment-methods">
-                        <label className="payment-option">
+                        <label className={`payment-option-fancy ${form.paymentMethod === "cod" ? "active" : ""}`}>
                           <input
                             type="radio"
                             name="paymentMethod"
@@ -1027,9 +988,33 @@ const CheckoutPage = () => {
                             checked={form.paymentMethod === "cod"}
                             onChange={handleChange}
                           />
-                          <span>Cash on delivery (COD)</span>
+                          <div className="payment-option-content">
+                            <span className="payment-icon icon-cod">💵</span>
+                            <div className="payment-text">
+                              <span className="payment-title">Cash on delivery (COD)</span>
+                              <span className="payment-desc">Pay when items are delivered</span>
+                            </div>
+                          </div>
                         </label>
-                        <label className="payment-option">
+
+                        <label className={`payment-option-fancy ${form.paymentMethod === "momo" ? "active" : ""}`}>
+                          <input
+                            type="radio"
+                            name="paymentMethod"
+                            value="momo"
+                            checked={form.paymentMethod === "momo"}
+                            onChange={handleChange}
+                          />
+                          <div className="payment-option-content">
+                            <img src={momoLogo} alt="Momo" className="payment-logo" />
+                            <div className="payment-text">
+                              <span className="payment-title">Momo E-Wallet</span>
+                              <span className="payment-desc">Pay via Momo QR Code</span>
+                            </div>
+                          </div>
+                        </label>
+
+                        <label className={`payment-option-fancy ${form.paymentMethod === "vnpay" ? "active" : ""}`}>
                           <input
                             type="radio"
                             name="paymentMethod"
@@ -1037,7 +1022,47 @@ const CheckoutPage = () => {
                             checked={form.paymentMethod === "vnpay"}
                             onChange={handleChange}
                           />
-                          <span>VNPAY / Internet Banking</span>
+                          <div className="payment-option-content">
+                            <img src={vnpayLogo} alt="VNPAY" className="payment-logo" />
+                            <div className="payment-text">
+                              <span className="payment-title">VNPAY Gateway</span>
+                              <span className="payment-desc">Internet Banking / QR Pay</span>
+                            </div>
+                          </div>
+                        </label>
+
+                        <label className={`payment-option-fancy ${form.paymentMethod === "credit_card" ? "active" : ""}`}>
+                          <input
+                            type="radio"
+                            name="paymentMethod"
+                            value="credit_card"
+                            checked={form.paymentMethod === "credit_card"}
+                            onChange={handleChange}
+                          />
+                          <div className="payment-option-content">
+                            <span className="payment-icon">💳</span>
+                            <div className="payment-text">
+                              <span className="payment-title">Credit / Debit Card</span>
+                              <span className="payment-desc">Visa, Mastercard, JCB</span>
+                            </div>
+                          </div>
+                        </label>
+
+                        <label className={`payment-option-fancy ${form.paymentMethod === "bank_transfer" ? "active" : ""}`}>
+                          <input
+                            type="radio"
+                            name="paymentMethod"
+                            value="bank_transfer"
+                            checked={form.paymentMethod === "bank_transfer"}
+                            onChange={handleChange}
+                          />
+                          <div className="payment-option-content">
+                            <span className="payment-icon">🏦</span>
+                            <div className="payment-text">
+                              <span className="payment-title">Bank Transfer</span>
+                              <span className="payment-desc">Manual transfer via Banking app</span>
+                            </div>
+                          </div>
                         </label>
                       </div>
 
@@ -1221,6 +1246,104 @@ const CheckoutPage = () => {
           </aside>
         )}
       </div>
+      {/* PAYMENT SIMULATION MODAL */}
+      {isSimulatingPayment && (
+        <div className="payment-modal-overlay">
+          <div className="payment-modal-card">
+            <header className="payment-modal-header">
+              <h3>Secure Payment Simulation</h3>
+              <button 
+                type="button" 
+                className="payment-modal-close"
+                onClick={() => setIsSimulatingPayment(false)}
+              >
+                ×
+              </button>
+            </header>
+            
+            <div className="payment-modal-body">
+              <div className="payment-modal-amount">
+                <span className="payment-modal-label">Amount to pay</span>
+                <span className="payment-modal-value">{formatVND(total)}</span>
+              </div>
+              
+              <div className="payment-modal-visual">
+                {form.paymentMethod === "momo" ? (
+                  <div className="payment-qr-container">
+                    <img 
+                      src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=MoMoSimulation" 
+                      alt="Momo QR Code" 
+                      className="payment-qr-img" 
+                    />
+                    <p>Scan this QR code with <strong>Momo App</strong> to pay</p>
+                  </div>
+                ) : form.paymentMethod === "vnpay" ? (
+                  <div className="payment-qr-container">
+                    <img 
+                      src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=VNPAYSimulation" 
+                      alt="VNPAY QR Code" 
+                      className="payment-qr-img" 
+                    />
+                    <p>Scan with <strong>Mobile Banking app</strong> via VNPAY-QR</p>
+                  </div>
+                ) : form.paymentMethod === "bank_transfer" ? (
+                  <div className="payment-qr-container">
+                    <img 
+                      src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=BankTransferSimulation" 
+                      alt="Bank QR Code" 
+                      className="payment-qr-img" 
+                    />
+                    <p>Transfer to: <strong>Vietcombank - 0011001234567</strong></p>
+                  </div>
+                ) : form.paymentMethod === "credit_card" ? (
+                  <div className="payment-card-sim">
+                    <div className="mock-card-front">
+                      <div className="card-chip"></div>
+                      <div className="card-number">**** **** **** 4242</div>
+                      <div className="card-info">
+                        <span>HOLDER NAME</span>
+                        <span>12/28</span>
+                      </div>
+                    </div>
+                    <p style={{marginTop: '12px', fontSize: '13px', color: '#64748b'}}>Mock Payment Gateway - Enter any info</p>
+                    <div className="mock-card-inputs" style={{display: 'flex', gap: '8px', marginTop: '8px'}}>
+                       <input type="text" placeholder="Card Number" defaultValue="4242 4242 4242 4242" disabled style={{flex: 2, fontSize: '12px'}} />
+                       <input type="text" placeholder="CVV" defaultValue="123" disabled style={{flex: 1, fontSize: '12px'}} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="payment-redirect-sim">
+                    <div className="payment-loader"></div>
+                    <p>Connecting to <strong>{form.paymentMethod.toUpperCase()}</strong> Secure Gateway...</p>
+                  </div>
+                )}
+              </div>
+              
+              <div className="payment-modal-notice">
+                <p>⚠️ This is a <strong>Simulation</strong> for demonstration purposes. No real money will be charged.</p>
+              </div>
+            </div>
+
+            <footer className="payment-modal-footer">
+              <button 
+                type="button" 
+                className="payment-modal-cancel"
+                onClick={() => setIsSimulatingPayment(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                className="payment-modal-confirm"
+                onClick={() => executePlaceOrder(pendingOrderPayload, true)}
+                disabled={submitting}
+              >
+                {submitting ? "Processing..." : "Confirm Payment Success"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </main>
   );
 };

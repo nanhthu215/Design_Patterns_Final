@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const UploadRepository = require('../repositories/UploadRepository');
+const UploadRepository = require('../patterns/repository/UploadRepository');
 const UploadController = require('../controllers/UploadController');
 
 const router = express.Router();

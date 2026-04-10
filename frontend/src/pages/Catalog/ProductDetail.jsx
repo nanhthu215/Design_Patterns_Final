@@ -36,15 +36,20 @@ function formatPrice(n) {
   }).format(num);
 }
 
-function getSizeVar(p) {
-  return p?.variants?.find((v) => v.name === "size");
-}
-
-function getPriceWithSize(p, optIdx = 0) {
-  const base = Number(p?.price || 0);
-  const sizeVar = getSizeVar(p);
-  const delta = Number(sizeVar?.options?.[optIdx]?.priceDelta || 0);
-  return base + delta;
+function getSelectedPrice(product, selectedOptions) {
+  const base = Number(product?.price || 0);
+  if (!product?.variants) return base;
+  
+  let totalDelta = 0;
+  product.variants.forEach(variant => {
+    const selectedLabel = selectedOptions[variant.name];
+    const option = variant.options?.find(o => o.label === selectedLabel);
+    if (option) {
+      totalDelta += Number(option.priceDelta || 0);
+    }
+  });
+  
+  return base + totalDelta;
 }
 
 // ===== Star rating input (1–5, clickable, có hỗ trợ disabled) =====
@@ -95,7 +100,8 @@ function StarRatingInput({ value, onChange, disabled }) {
 }
 
 const ProductDetail = () => {
-  const { id } = useParams();
+  const { productId, id: routeId } = useParams();
+  const id = productId || routeId;
   const navigate = useNavigate();
   const { addToCart } = useCart();
 
@@ -106,7 +112,7 @@ const ProductDetail = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [selectedSize, setSelectedSize] = useState("");
+  const [selectedOptions, setSelectedOptions] = useState({});
   const [qty, setQty] = useState(1);
 
   // ----- REVIEW STATE -----
@@ -160,13 +166,14 @@ const ProductDetail = () => {
         const p = json.data || json.product || json;
         setProduct(p);
 
-        // setup default size
-        const sizeVar = getSizeVar(p);
-        if (sizeVar?.options?.length) {
-          setSelectedSize(sizeVar.options[0].label);
-        } else {
-          setSelectedSize("");
-        }
+        // setup default options
+        const defaults = {};
+        p.variants?.forEach(v => {
+          if (v.options?.length) {
+            defaults[v.name] = v.options[0].label;
+          }
+        });
+        setSelectedOptions(defaults);
         setQty(1);
       } catch (err) {
         if (err.name !== "AbortError") {
@@ -224,9 +231,13 @@ const ProductDetail = () => {
   useEffect(() => {
     if (!id) return;
 
-    // 👉 Chỉ mở WS khi có env, không fallback auto nữa
-    const wsBase = process.env.REACT_APP_WS_BASE_URL;
-    if (!wsBase) return; // chưa cấu hình thì thôi, khỏi mở → khỏi log lỗi
+    // 👉 Tự động nhận diện URL WebSocket nếu thiếu cấu hình env
+    let wsBase = process.env.REACT_APP_WS_BASE_URL;
+    if (!wsBase) {
+      const isSecure = window.location.protocol === "https:";
+      const host = window.location.hostname === "localhost" ? "localhost:3001" : window.location.host;
+      wsBase = (isSecure ? "wss://" : "ws://") + host;
+    }
 
     const wsUrl = wsBase.replace(/\/$/, "") + `/ws/products/${id}/reviews`;
 
@@ -249,6 +260,7 @@ const ProductDetail = () => {
           (Array.isArray(payload.reviews) && payload.reviews);
 
         if (list) {
+          console.log(`🔔 [Observer Pattern] Received real-time review list update via WebSocket (${list.length} reviews)`);
           setReviews(list);
           return;
         }
@@ -260,6 +272,7 @@ const ProductDetail = () => {
           (payload.type === "review:new" ? payload.payload : null);
 
         if (review) {
+          console.log(`🔔 [Observer Pattern] Received NEW review in real-time for product ID: ${id}`);
           setReviews((prev) => {
             const idKey = review._id || review.id;
             if (idKey && prev.some((r) => (r._id || r.id) === idKey)) {
@@ -297,7 +310,6 @@ const ProductDetail = () => {
   }, [id]);
 
 
-  const sizeVar = getSizeVar(product);
   const imageSrc = resolveImage(product);
   const description = product?.description || product?.desc || "";
 
@@ -306,63 +318,52 @@ const ProductDetail = () => {
   const inStock = stock > 0;
 
   // determine selected option by label
-  const { priceNumber, total, currentLabel, optIdx } = useMemo(() => {
+  const { priceNumber, total } = useMemo(() => {
     if (!product) {
       return {
         priceNumber: 0,
         total: 0,
-        currentLabel: "",
-        optIdx: 0,
       };
     }
 
-    let currentLabelLocal = selectedSize;
-    if (sizeVar?.options?.length && !currentLabelLocal) {
-      currentLabelLocal = sizeVar.options[0].label;
-    }
-
-    let idx = 0;
-    if (sizeVar?.options?.length && currentLabelLocal) {
-      const found = sizeVar.options.findIndex(
-        (op) => op.label === currentLabelLocal
-      );
-      idx = found >= 0 ? found : 0;
-    }
-
-    const price = getPriceWithSize(product, idx);
+    const price = getSelectedPrice(product, selectedOptions);
     const safeQty = qty && qty > 0 ? qty : 1;
 
     return {
       priceNumber: price,
       total: price * safeQty,
-      currentLabel: currentLabelLocal,
-      optIdx: idx,
     };
-  }, [product, sizeVar, selectedSize, qty]);
+  }, [product, selectedOptions, qty]);
+
+  const handleOptionChange = (variantName, label) => {
+    setSelectedOptions(prev => ({
+      ...prev,
+      [variantName]: label
+    }));
+  };
 
   // ===== Cart helpers – same as OrderModal =====
   const buildCartItem = () => {
     if (!product) return null;
 
     const basePrice = Number(product.price || 0);
-    const variant = sizeVar ? { name: "size", value: currentLabel } : null;
-    const variantOptions = sizeVar?.options?.map((op) => ({
-      label: op.label,
-      priceDelta: Number(op.priceDelta || 0),
-    }));
+    
+    // Convert selectedOptions object to a string list for cart display
+    const variantLabels = Object.entries(selectedOptions)
+      .map(([name, label]) => `${name}: ${label}`)
+      .join(", ");
 
     return {
       productId: String(product._id || product.id),
       name: product.name,
       price: priceNumber,
       image: imageSrc,
-      variant,
+      variant: variantLabels ? { name: "Options", value: variantLabels } : null,
       qty: qty && qty > 0 ? qty : 1,
       stock,
       category: product.category,
       basePrice,
-      variantOptions,
-      variantIndex: optIdx,
+      selectedOptions, // pass the raw object too
     };
   };
 
@@ -468,6 +469,8 @@ const ProductDetail = () => {
       payload.rating = reviewRating;
     }
 
+    console.log("🚀 [Observer Pattern] Attempting to submit review. Subject: Product ID", id);
+
     try {
       const res = await fetch(
         `${API_BASE_URL}/api/products/${id}/reviews`,
@@ -480,12 +483,15 @@ const ProductDetail = () => {
 
       if (!res.ok) {
         const txt = await res.text();
-        console.error("Submit review fail:", txt);
+        console.error("❌ [Observer Pattern] Submit review failed at server:", txt);
         throw new Error(txt || "Failed to submit review");
       }
 
       const json = await res.json();
       const created = json.data || json.review || payload;
+
+      console.log("✅ [Observer Pattern] Review broadcasted successfully!");
+      console.log("📢 [Observer] Subject (Backend) will now notify all observers about this new review.");
 
       // Optimistic update: thêm vào list hiện tại
       setReviews((prev) => {
@@ -510,7 +516,7 @@ const ProductDetail = () => {
         setCustomerEmail(email);
       }
     } catch (err) {
-      console.error("Submit review error:", err);
+      console.error("❌ [Observer Pattern] Fatal error during submission:", err.message);
       alert("Failed to submit your review. Please try again later.");
     }
   };
@@ -710,34 +716,40 @@ const ProductDetail = () => {
                   {inStock ? "In stock" : "Temporarily out of stock"}
                 </strong>
               </span>
+              {product.categorySpecialInfo && (
+                <span>
+                  <strong>Đặc điểm loại:</strong> {product.categorySpecialInfo}
+                </span>
+              )}
             </div>
 
             <div className="pd-purchase-block">
-              {/* SIZE */}
-              <div className="pd-field">
-                <div className="pd-field-label">
-                  <span>Size / Option</span>
+              {/* DYNAMIC VARIANTS */}
+              {product.variants?.map((v, vIdx) => (
+                <div className="pd-field" key={vIdx}>
+                  <div className="pd-field-label">
+                    <span>{v.name}</span>
+                  </div>
+                  {v.options?.length ? (
+                    <select
+                      className="pd-select"
+                      value={selectedOptions[v.name] || ""}
+                      onChange={(e) => handleOptionChange(v.name, e.target.value)}
+                    >
+                      {v.options.map((op, i) => (
+                        <option key={i} value={op.label}>
+                          {op.label}
+                          {op.priceDelta
+                            ? ` (${op.priceDelta > 0 ? "+" : ""}${formatPrice(op.priceDelta)})`
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="pd-select disabled">Default</div>
+                  )}
                 </div>
-                {sizeVar?.options?.length ? (
-                  <select
-                    className="pd-select"
-                    value={currentLabel}
-                    onChange={(e) => setSelectedSize(e.target.value)}
-                  >
-                    {sizeVar.options.map((op, i) => (
-                      <option key={i} value={op.label}>
-                        {op.label}
-                        {op.priceDelta
-                          ? ` (${op.priceDelta > 0 ? "+" : ""
-                          }${formatPrice(op.priceDelta)})`
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="pd-select disabled">Default</div>
-                )}
-              </div>
+              ))}
 
               {/* QTY */}
               <div className="pd-field">

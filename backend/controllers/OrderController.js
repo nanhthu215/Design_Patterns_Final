@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
-const { DataExportService } = require('../services/DataExportService');
-const PaymentProcessor = require('../strategies/PaymentProcessor');
+const { DataExportService } = require('../patterns/strategy/export/DataExportService');
+const PaymentProcessor = require('../patterns/strategy/payment/PaymentProcessor');
 /**
  * OrderController - Business logic layer for Order operations
  */
@@ -324,15 +324,22 @@ class OrderController {
       // Apply loyalty points if enabled
       let pointsUsed = 0;
       if (usePoints) {
-        const customer = await this.orderRepository.Customer?.findById(customerId);
-        if (customer && customer.loyalty?.currentPoints) {
-          pointsUsed = Math.min(
-            customer.loyalty.currentPoints,
-            Math.floor(subtotal / 100) // 100 VND = 1 point
-          );
-          discountAmount += pointsUsed * 100;
+        // Validate customerId format before finding
+        const isValidObjectId = mongoose.Types.ObjectId.isValid(customerId);
+        if (isValidObjectId) {
+          const customer = await this.orderRepository.Customer?.findById(customerId);
+          if (customer && customer.loyalty?.currentPoints) {
+            pointsUsed = Math.min(
+              customer.loyalty.currentPoints,
+              Math.floor(subtotal / 100) // 100 VND = 1 point
+            );
+            discountAmount += pointsUsed * 100;
+          }
         }
       }
+      console.log(`📦 [OrderController] Creating order for customer: ${customerId}`);
+      console.log(`💳 [OrderController] Payment Method: ${paymentMethod}`);
+      console.log(`🛒 [OrderController] Items: ${items?.length || 0}`);
 
       const totalAmount = subtotal - discountAmount;
 
@@ -340,14 +347,21 @@ class OrderController {
 
       if (paymentMethod !== "cod") {
         let pDetails = paymentDetails || {};
-        if (Object.keys(pDetails).length === 0) {
-          if (['vnpay', 'momo', 'ewallet'].includes(paymentMethod)) {
-            pDetails = { walletType: paymentMethod === 'vnpay' ? 'VNPay' : (paymentMethod === 'momo' ? 'Momo' : 'PayPal'), walletEmail: 'customer@example.com' };
-          } else if (paymentMethod === 'credit_card' || paymentMethod === 'card') {
-            pDetails = { cardNumber: '1234567890123456', cardHolder: 'Mock User', expiryDate: '12/28', cvv: '123' };
-          } else if (paymentMethod === 'bank_transfer' || paymentMethod === 'bank') {
-            pDetails = { bankName: 'TestBank', accountNumber: '123456789', accountName: 'Mock User' };
-          }
+        
+        // Chuẩn hóa tên phương thức để kiểm tra (vídụ: "Credit Card" -> "credit_card")
+        const normalizedMethod = (paymentMethod || "").toLowerCase().trim().replace(/\s+/g, '_');
+
+        // Luôn đắp dữ liệu mẫu nếu thiếu các trường bắt buộc của CreditCard
+        if ((normalizedMethod === 'credit_card' || normalizedMethod === 'card' || normalizedMethod === 'creditcard') && !pDetails.cardholderName) {
+          pDetails = { cardNumber: '1234567890123456', cardholderName: 'Mock User', expiryDate: '12/28', cvv: '123' };
+        } 
+        // Luôn đắp dữ liệu mẫu nếu thiếu các trường bắt buộc của BankTransfer
+        else if ((normalizedMethod === 'bank_transfer' || normalizedMethod === 'bank' || normalizedMethod === 'banktransfer') && !pDetails.bankCode) {
+          pDetails = { bankCode: 'TestBank', accountNumber: '123456789', accountHolderName: 'Mock User' };
+        }
+        // Các loại ví điện tử khác
+        else if (['vnpay', 'momo', 'ewallet'].includes(normalizedMethod) && Object.keys(pDetails).length === 0) {
+          pDetails = { walletType: normalizedMethod === 'vnpay' ? 'VNPay' : (normalizedMethod === 'momo' ? 'Momo' : 'PayPal'), walletEmail: 'customer@example.com' };
         }
 
         paymentResult = await this.paymentProcessor.processPayment(
@@ -407,6 +421,14 @@ class OrderController {
         data: order,
       });
     } catch (error) {
+      console.error("❌ Order Creation Failed:", error.message);
+      if (error.name === 'ValidationError') {
+        return res.status(400).json({
+          success: false,
+          message: "Validation Error",
+          details: error.errors
+        });
+      }
       next(error);
     }
   }
@@ -417,24 +439,27 @@ class OrderController {
   async updateStatus(req, res, next) {
     try {
       const { id } = req.params;
-      const { status, notes } = req.body;
+      const { status, paymentStatus, notes } = req.body;
 
-      if (!status) {
+      if (!status && !paymentStatus) {
         return res.status(400).json({
           success: false,
-          message: "Missing status",
+          message: "Missing status or paymentStatus",
         });
       }
 
-      const validStatuses = ["pending", "processing", "completed", "cancelled"];
-      if (!validStatuses.includes(status)) {
-        return res.status(400).json({
-          success: false,
-          message: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
-        });
+      // Validate order status if provided
+      if (status) {
+        const validStatuses = ["pending", "processing", "completed", "cancelled"];
+        if (!validStatuses.includes(status)) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
+          });
+        }
       }
 
-      const order = await this.orderRepository.updateStatus(id, status, { notes });
+      const order = await this.orderRepository.updateStatus(id, { status, paymentStatus, notes });
 
       if (!order) {
         return res.status(404).json({
@@ -448,6 +473,7 @@ class OrderController {
         data: order,
       });
     } catch (error) {
+      console.error("❌ Order Status Update Failed:", error.message);
       next(error);
     }
   }

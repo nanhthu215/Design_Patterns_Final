@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import { OrderDetail as OrderDetailType, Order } from '../../types';
 import OrderList from './OrderList';
 import OrderDetailComponent from './OrderDetail';
@@ -12,6 +13,7 @@ interface OrdersProps {
   onOrderClose?: () => void;
   onBackToCustomer?: () => void;
 }
+
 
 // Adapt backend order payload to OrderDetailType used by UI
 const adaptOrderDetail = (o: any): OrderDetailType => {
@@ -175,7 +177,9 @@ const adaptOrderDetail = (o: any): OrderDetailType => {
   } as any;
 };
 
-const Orders: React.FC<OrdersProps> = ({ initialOrderId = null, initialOrderData = null, fromCustomer = false, onOrderClose, onBackToCustomer }) => {
+const Orders: React.FC<OrdersProps> = ({ initialOrderId: propOrderId = null, initialOrderData = null, fromCustomer = false, onOrderClose, onBackToCustomer }) => {
+  const { orderId: urlOrderId } = useParams<{ orderId: string }>();
+  const initialOrderId = propOrderId || urlOrderId || null;
   // Use useMemo to compute selectedOrder from initialOrderId or initialOrderData
   const initialOrder = useMemo(() => {
     // If we have initialOrderData, adapt it immediately to avoid fetch

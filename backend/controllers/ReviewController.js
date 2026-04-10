@@ -15,9 +15,11 @@ class ReviewController {
    */
   async create(req, res, next) {
     try {
+      console.log('📩 [ReviewController] Received NEW review request:', req.body);
       const { productId, customerEmail, customerName, rating, title, comment } = req.body;
 
       if (!productId || !customerEmail || !customerName || !comment) {
+        console.log('⚠️ [ReviewController] Validation failed: Missing fields');
         return res.status(400).json({
           success: false,
           message: 'Missing required fields',

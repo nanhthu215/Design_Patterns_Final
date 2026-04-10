@@ -110,6 +110,51 @@ useEffect(() => {
     if (isDesktop && drawerOpen) setDrawerOpen(false);
   }, [isDesktop, drawerOpen]);
 
+  const [categories, setCategories] = useState([]);
+
+  // Mapping slugs to standard labels/names for backward compatibility
+  const SLUG_TO_NAME_MAP = {
+    "coffee-sets": "Coffee sets",
+    "cups-mugs": "Cups & Mugs",
+    "roast-coffee": "Roasted coffee",
+    "coffee-makers-grinders": "Coffee makers and grinders"
+  };
+
+  const slugify = (text) => {
+    // Check if we have a hardcoded slug for this exact name
+    const entry = Object.entries(SLUG_TO_NAME_MAP).find(([s, n]) => n === text);
+    if (entry) return entry[0];
+
+    return text.toString().toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^\w-]+/g, '')
+      .replace(/--+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '');
+  };
+
+  // Fetch categories
+  useEffect(() => {
+    const controller = new AbortController();
+    async function fetchCategories() {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/categories`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        const list = json.data || [];
+        setCategories(list);
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          console.error("Navbar categories error:", err);
+        }
+      }
+    }
+    fetchCategories();
+    return () => controller.abort();
+  }, []);
+
   // Lấy toàn bộ sản phẩm 1 lần để dùng cho gợi ý search
   useEffect(() => {
     const controller = new AbortController();
@@ -266,20 +311,14 @@ useEffect(() => {
               </a>
               {openMenu && isDesktop && (
                 <ul className="dropdown-menu">
-                  <li>
-                    <Link to="/menu/coffee-sets">Coffee Sets</Link>
-                  </li>
-                  <li>
-                    <Link to="/menu/cups-mugs">Cup & Mugs</Link>
-                  </li>
-                  <li>
-                    <Link to="/menu/roast-coffee">Roast Coffee</Link>
-                  </li>
-                  <li>
-                    <Link to="/menu/coffee-makers-grinders">
-                      Coffee Makers & Grinders
-                    </Link>
-                  </li>
+                  {categories.map((cat) => {
+                    const name = typeof cat === "string" ? cat : cat.name;
+                    return (
+                      <li key={name}>
+                        <Link to={`/menu/${slugify(name)}`}>{name}</Link>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </li>
@@ -527,29 +566,19 @@ useEffect(() => {
               MENU ▾<span className="caret">▾</span>
             </button>
             <ul id="drawer-submenu" className="accordion-panel">
-              <li>
-                <Link to="/menu/coffee-sets" onClick={closeDrawer}>
-                  Coffee Sets
-                </Link>
-              </li>
-              <li>
-                <Link to="/menu/cups-mugs" onClick={closeDrawer}>
-                  Cup & Mugs
-                </Link>
-              </li>
-              <li>
-                <Link to="/menu/roast-coffee" onClick={closeDrawer}>
-                  Roast Coffee
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/menu/coffee-makers-grinders"
-                  onClick={closeDrawer}
-                >
-                  Coffee Makers & Grinders
-                </Link>
-              </li>
+              {categories.map((cat) => {
+                const name = typeof cat === "string" ? cat : cat.name;
+                return (
+                  <li key={name}>
+                    <Link
+                      to={`/menu/${slugify(name)}`}
+                      onClick={closeDrawer}
+                    >
+                      {name}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </li>
 

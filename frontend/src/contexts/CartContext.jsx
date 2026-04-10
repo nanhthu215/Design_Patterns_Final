@@ -9,8 +9,10 @@ const CartContext = createContext(null);
 // Initialize pure CartService with LocalStorageAdapter (one-time setup)
 const cartService = (() => {
   const instance = CartService.getInstance();
+  console.log("🛡️ [Singleton Pattern] CartService instance initialized and shared across app");
   if (!instance.constructor._storage) {
     CartService.setStorage(new LocalStorageAdapter());
+    console.log("🧩 [Adapter Pattern] LocalStorageAdapter injected into CartService");
   }
   return instance;
 })();
@@ -26,6 +28,7 @@ export const CartProvider = ({ children }) => {
   // ⭐ PURE: When user changes, load their cart through CartService
   useEffect(() => {
     let unsubscribe = null;
+    let storageHandler = null;
 
     const initializeCart = async () => {
       try {
@@ -46,6 +49,16 @@ export const CartProvider = ({ children }) => {
           console.log("✅ [CartObserver] Cart synchronized");
         });
 
+        // 🔄 [Observer Pattern] Listen for storage events (other tabs of same browser)
+        storageHandler = (e) => {
+          const userKeyFragment = currentUserEmail || "anonymous";
+          if (e.key && e.key.startsWith("cart-items-") && e.key.includes(userKeyFragment)) {
+             console.log(`🔄 [Observer Pattern] Cart change detected in another tab. Syncing...`);
+             cartService.getItems().then(setItems);
+          }
+        };
+        window.addEventListener("storage", storageHandler);
+
         setIsInitialized(true);
       } catch (error) {
         console.error("❌ [CartContext] Error initializing cart:", error);
@@ -56,9 +69,11 @@ export const CartProvider = ({ children }) => {
 
     initializeCart();
 
-    // ⭐ Synchronous cleanup function (React requires this)
     return () => {
       if (unsubscribe) unsubscribe();
+      if (storageHandler) {
+        window.removeEventListener("storage", storageHandler);
+      }
     };
   }, [currentUserEmail]);
 
@@ -102,31 +117,12 @@ export const CartProvider = ({ children }) => {
   // ⭐ PURE: Update item variant through CartService
   const updateItemVariant = async (key, payload = {}) => {
     const current = items.find((it) => it.key === key);
-    if (!current) return;
+    if (!current) return null;
 
-    const {
-      variant: incomingVariant,
-      price,
-      basePrice,
-      variantOptions,
-      variantIndex,
-    } = payload;
-
-    const nextVariant = incomingVariant || current.variant;
-    const newKey = `${current.productId || ""}-${nextVariant?.name || ""}-${
-      nextVariant?.value || "default"
-    }`;
-
-    // If key is the same, just update through CartService
-    if (newKey === key) {
-      await cartService.updateQuantity(key, current.qty);
-      return;
-    }
-
-    // If key changed, need to handle via pure logic
-    // This is complex, keep as is for now, delegate to helper
-    console.warn("[CartContext] updateItemVariant not fully delegated yet");
-    // TODO: Extend CartService to handle variant updates
+    // Delegate entirely to CartService which handles key change, merge, persist
+    const newKey = await cartService.updateItemVariant(key, payload);
+    // CartService observers will trigger setItems via subscribe callback
+    return newKey;
   };
 
   // Show loading state until cart initialized

@@ -143,7 +143,7 @@ function isProductInStock(p) {
 
 // ==== Cart helpers (giống ProductDetail, rút gọn) ====
 function getSizeVar(p) {
-  return p?.variants?.find((v) => v.name === "size");
+  return p?.variants?.length ? p.variants[0] : null;
 }
 
 function getPriceWithSize(p, optIdx = 0) {
@@ -180,7 +180,7 @@ function buildQuickCartItem(product, qty = 1) {
 
   const variant =
     sizeVar && currentLabel
-      ? { name: "size", value: currentLabel }
+      ? { name: sizeVar.name, value: currentLabel }
       : null;
 
   const variantOptions = sizeVar?.options?.map((op) => ({
@@ -749,6 +749,16 @@ export default function MenuCatalogSection({
                       <p className="product-desc">
                         {p.description || p.desc || ""}
                       </p>
+                      {p.categorySpecialInfo && (
+                        <p className="product-attribute" style={{
+                          fontSize: "0.78rem",
+                          color: "#a0855b",
+                          margin: "4px 0 0",
+                          fontStyle: "italic"
+                        }}>
+                          <strong>{p.categorySpecialInfo}</strong>
+                        </p>
+                      )}
 
                       <div className="product-price">
                         <span className="current-price">

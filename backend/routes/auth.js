@@ -1,7 +1,7 @@
 // backend/routes/auth.js
 const express = require("express");
 const Customer = require("../models/Customer");
-const AuthRepository = require("../repositories/AuthRepository");
+const AuthRepository = require("../patterns/repository/AuthRepository");
 const AuthController = require("../controllers/AuthController");
 
 const router = express.Router();

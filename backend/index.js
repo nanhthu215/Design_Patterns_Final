@@ -8,11 +8,16 @@ const http = require("http");
 const net = require("net");
 const WebSocket = require("ws");
 
-
+const { configureWebSocket } = require("./routes/websocket");
 const app = express();
 const START_PORT = Number(process.env.PORT) || 3001; // port khởi đầu
 
-connectDB();
+console.log('📡 Đang kết nối Database...');
+connectDB().then(() => {
+    console.log('✅ Kết nối DB thành công');
+}).catch(err => {
+    console.error('❌ Lỗi kết nối DB:', err.message);
+});
 
 // ================== MIDDLEWARE CHUNG ==================
 const corsOptions = {
@@ -72,16 +77,19 @@ app.get("/health", (req, res) => {
 const server = http.createServer(app); // thay vì app.listen trực tiếp
 
 // Initialize pure patterns with adapters
-const ReviewObserver = require("./core/services/ReviewObserver");
-const WebSocketAdapter = require("./core/adapters/WebSocketAdapter");
-const MemoryStorageAdapter = require("./core/adapters/MemoryStorageAdapter");
-const CartService = require("./core/services/CartService");
+const ReviewObserver = require("./patterns/observer/ReviewObserver");
+const WebSocketAdapter = require("./patterns/adapter/WebSocketAdapter");
+const MemoryStorageAdapter = require("./patterns/adapter/MemoryStorageAdapter");
+const CartService = require("./patterns/singleton/CartService");
 
 // ✅ Setup ReviewObserver (pure)
 const reviewObserver = ReviewObserver.getInstance();
 
+// ✅ Setup WebSocket server logic
+const wsServer = configureWebSocket(server);
+
 // ✅ Setup WebSocket adapter to connect pure observer to Express
-const wsAdapter = new WebSocketAdapter(server, reviewObserver);
+const wsAdapter = new WebSocketAdapter(reviewObserver, wsServer);
 
 // ✅ Setup CartService with storage injection
 CartService.setStorage(MemoryStorageAdapter.getInstance());

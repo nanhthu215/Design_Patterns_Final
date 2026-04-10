@@ -1,6 +1,6 @@
 const Review = require('../models/Review');
 const Product = require('../models/Product');
-const ProductFactory = require('../services/ProductFactory');
+const ProductFactory = require('../patterns/factory/ProductFactory');
 /**
  * ProductController - Business logic layer cho Products
  * Xử lý HTTP requests và gọi Repository
@@ -8,6 +8,46 @@ const ProductFactory = require('../services/ProductFactory');
 class ProductController {
   constructor(productRepository) {
     this.productRepository = productRepository;
+  }
+
+  /**
+   * GET /api/products/defaults?category=...
+   * Lấy các biến thể mặc định của một category từ Factory
+   */
+  async getDefaults(req, res, next) {
+    try {
+      const { category } = req.query;
+      if (!category) {
+        return res.status(400).json({ success: false, message: 'Category is required' });
+      }
+
+      // 1. Kiểm tra cấu hình động từ Database trước (ưu tiên)
+      const CategoryModel = require('../models/Category');
+      const categoryDoc = await CategoryModel.findOne({ name: { $regex: `^${category}$`, $options: 'i' } }).lean();
+      
+      if (categoryDoc && categoryDoc.defaultVariants && categoryDoc.defaultVariants.length > 0) {
+        return res.json({
+          success: true,
+          data: {
+            category: categoryDoc.name,
+            variants: categoryDoc.defaultVariants
+          }
+        });
+      }
+
+      // 2. 🔄 Nếu Database chưa có cấu hình, Fallback về Factory pattern
+      const factoryProduct = ProductFactory.createProduct(category, {});
+      
+      return res.json({
+        success: true,
+        data: {
+          category: factoryProduct.category,
+          variants: factoryProduct.variants || []
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
   }
 
   /**
@@ -41,7 +81,7 @@ class ProductController {
         limit: Math.max(parseInt(limit, 10) || 12, 1),
       };
 
-      const result = await this.productRepository.findPaginated(
+      const result = await this.productRepository.findPaginatedWithCategoryAttributes(
         filters,
         pagination,
         sortBy
@@ -72,6 +112,9 @@ class ProductController {
         });
       }
 
+      // 🔄 Sử dụng Factory để lấy thông tin đặc trưng (Enrichment)
+      const factoryProduct = ProductFactory.createProduct(product.category, product);
+
       const transformedProduct = {
         id: product.id || product._id,
         name: product.name,
@@ -84,6 +127,7 @@ class ProductController {
         quantity: product.quantity,
         status: product.status,
         variants: product.variants || [],
+        categorySpecialInfo: factoryProduct.getCategorySpecialInfo(),
       };
 
       res.json({
@@ -191,6 +235,16 @@ class ProductController {
 
       const review = await Review.create(reviewData);
 
+      // ✅ OBSERVER PATTERN: Broadcast review through ReviewObserver
+      try {
+        const ReviewObserver = require('../patterns/observer/ReviewObserver');
+        const observer = ReviewObserver.getInstance();
+        console.log(`🔔 [ReviewObserver] Detected NEW review for Product ID: ${productIdNum}`);
+        observer.broadcastNewReview(productIdNum, review);
+      } catch (obsError) {
+        console.warn('⚠️ [ProductController] Observer error:', obsError.message);
+      }
+
       return res.status(201).json({
         success: true,
         data: review,
@@ -209,8 +263,19 @@ class ProductController {
     try {
       const { type = 'general', ...payload } = req.body;
 
+      // ⭐ SYNC CATEGORY: Tự động thêm vào bảng Category nếu chưa tồn tại
+      if (payload.category) {
+        const Category = require('../models/Category');
+        const exists = await Category.findOne({ name: { $regex: `^${payload.category}$`, $options: 'i' } });
+        if (!exists) {
+            await Category.create({ name: payload.category });
+            console.log(`✨ [AutoSync] New Category created: ${payload.category}`);
+        }
+      }
+
       // ⭐ FACTORY PATTERN: Delegate product creation to Factory
       const factoryProduct = ProductFactory.createProduct(type, payload);
+
 
       // Auto-generate unique numeric ID (max existing + 1)
       const lastProduct = await Product.findOne().sort({ id: -1 }).select('id').lean();
@@ -228,7 +293,10 @@ class ProductController {
         imageUrl: payload.imageUrl || `https://placehold.co/400x400?text=${encodeURIComponent(factoryProduct.name)}`,
         stock: factoryProduct.stock !== undefined ? factoryProduct.stock : true,
         status: payload.status || 'Publish',
-        variants: Array.isArray(payload.variants) ? payload.variants : [],
+        uniqueAttributeValue: payload.uniqueAttributeValue || '',
+        variants: (Array.isArray(payload.variants) && payload.variants.length > 0) 
+                  ? payload.variants 
+                  : (factoryProduct.variants || []),
       };
 
       console.log(`🏭 [ProductFactory] Created ${type} product: SKU=${productData.sku}, Name=${productData.name}`);

@@ -1,7 +1,7 @@
 // backend/routes/customers.js
 const express = require('express');
 const Customer = require('../models/Customer');
-const CustomerRepository = require('../repositories/CustomerRepository');
+const CustomerRepository = require('../patterns/repository/CustomerRepository');
 const CustomerController = require('../controllers/CustomerController');
 
 const router = express.Router();

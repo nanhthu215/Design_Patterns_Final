@@ -239,8 +239,13 @@ class ProductController {
       try {
         const ReviewObserver = require('../patterns/observer/ReviewObserver');
         const observer = ReviewObserver.getInstance();
-        console.log(`🔔 [ReviewObserver] Detected NEW review for Product ID: ${productIdNum}`);
-        observer.broadcastNewReview(productIdNum, review);
+        console.log(`🔔 [ReviewObserver] Detected NEW review for Product ID: ${productIdNum} (and string ID: ${id})`);
+        
+        // Broadcast đến cả ID URL (string) và ID number nội bộ
+        observer.broadcastNewReview(id, review);
+        if (String(id) !== String(productIdNum)) {
+          observer.broadcastNewReview(productIdNum, review);
+        }
       } catch (obsError) {
         console.warn('⚠️ [ProductController] Observer error:', obsError.message);
       }
